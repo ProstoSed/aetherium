@@ -18,6 +18,9 @@ export const VIEW_DISTANCE_IN_RADII = 5.5;
 
 type Flight = {
   from: THREE.Vector3;
+  /** Направление камеры от цели в начале и в конце; null — сохранить текущее. */
+  startDirection: THREE.Vector3;
+  endDirection: THREE.Vector3 | null;
   getTarget: () => THREE.Vector3;
   startDistance: number;
   endDistance: number;
@@ -67,12 +70,14 @@ export class CameraRig {
   }
 
   /** Перелёт к движущейся цели; после прибытия камера сопровождает её. */
-  flyTo(getTarget: () => THREE.Vector3, endDistance: number) {
+  flyTo(getTarget: () => THREE.Vector3, endDistance: number, endDirection: THREE.Vector3 | null = null) {
     const from = this.origin.clone();
     const gap = from.distanceTo(getTarget()) + Math.abs(this.distance - endDistance);
     const logGap = Math.log10(1 + gap / Math.max(endDistance, 1e-6));
     this.flight = {
       from,
+      startDirection: this.camera.position.clone().normalize(),
+      endDirection: endDirection?.clone().normalize() ?? null,
       getTarget,
       startDistance: this.distance,
       endDistance,
@@ -110,6 +115,10 @@ export class CameraRig {
       const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       this.origin.lerpVectors(f.from, f.getTarget(), eased);
       // Расстояние меняется в логарифмической шкале: от Нептуна к Земле без рывка в конце.
+      if (f.endDirection) {
+        this.scratch.copy(f.startDirection).lerp(f.endDirection, eased);
+        if (this.scratch.lengthSq() > 1e-6) this.camera.position.copy(this.scratch.normalize());
+      }
       this.setDistance(Math.exp(THREE.MathUtils.lerp(Math.log(f.startDistance), Math.log(f.endDistance), eased)));
       this.flightIntensity = Math.sin(Math.PI * t);
       if (t >= 1) this.flight = null;

@@ -52,6 +52,13 @@ export type LensParams = {
   ripple: number;
   rippleX: number;
   rippleY: number;
+  /** Характер плёнки: цветовой отклик и приподнятый чёрный. */
+  filmLook: number;
+  /** Метка смены части (0/1) — кружок в углу кадра; рисуется слоем поверх интерфейса. */
+  cueMark: number;
+  /** Разрыв плёнки 0…1 и угол линии разрыва. */
+  rip: number;
+  ripAngle: number;
 };
 
 export type LensKey = keyof LensParams;
@@ -62,11 +69,12 @@ export function neutralLens(): LensParams {
     flicker: 0, weave: 0, tear: 0, roll: 0, burn: 0, burnX: 0.5, burnY: 0.5, halation: 0, heat: 0, frost: 0,
     signalLoss: 0, lightLeak: 0, hotPixels: 0, tintR: 1, tintG: 1, tintB: 1, tintAmount: 0,
     warpX: 0.5, warpY: 0.5, warpStrength: 0, warpRadius: 0.2, ripple: 0, rippleX: 0.5, rippleY: 0.5,
+    filmLook: 0, cueMark: 0, rip: 0, ripAngle: 0,
   };
 }
 
 /** Параметры-координаты и множители не складываются, а заменяются или перемножаются. */
-const POSITIONAL: LensKey[] = ['burnX', 'burnY', 'warpX', 'warpY', 'warpRadius', 'rippleX', 'rippleY', 'tintR', 'tintG', 'tintB'];
+const POSITIONAL: LensKey[] = ['burnX', 'burnY', 'warpX', 'warpY', 'warpRadius', 'rippleX', 'rippleY', 'tintR', 'tintG', 'tintB', 'ripAngle'];
 
 export function addLens(target: LensParams, contribution: Partial<LensParams>, weight = 1) {
   for (const key of Object.keys(contribution) as LensKey[]) {

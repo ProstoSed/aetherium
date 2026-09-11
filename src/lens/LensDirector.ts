@@ -25,7 +25,11 @@ const INTENSITY_GAIN: Record<FilmIntensity, number> = { off: 0, soft: 1, strong:
 const RESPONSIVENESS_PER_SECOND = 3.2;
 
 /** Дефекты плёнки масштабируются настройкой; оптика событий (линза, рябь) — нет, это часть сюжета. */
-const FILM_DEFECTS: (keyof LensParams)[] = ['grain', 'scratches', 'dust', 'flicker', 'weave', 'tear', 'hotPixels', 'lightLeak', 'signalLoss', 'frost', 'heat', 'aberration', 'vignette', 'defocus', 'halation'];
+const FILM_DEFECTS: (keyof LensParams)[] = ['grain', 'scratches', 'dust', 'flicker', 'weave', 'tear', 'hotPixels', 'lightLeak', 'signalLoss', 'frost', 'heat', 'aberration', 'vignette', 'defocus', 'halation', 'filmLook'];
+/** Метка смены части держится четыре кадра при 24 кадрах в секунду. */
+const CUE_MARK_SECONDS = 4 / 24;
+/** Вторая метка (переключение проекторов) идёт через ~7,5 с после первой (запуск мотора). */
+const CUE_MARK_GAP_SECONDS = 7.5;
 
 type Incident = { until: number; lens: Partial<LensParams> };
 
@@ -43,6 +47,10 @@ export class LensDirector {
   private incident: Incident | null = null;
   private nextIncidentAt = 8;
   private nextSignalDropAt = 120;
+  private nextCueAt = 40 + Math.random() * 40;
+  private cueShownUntil = 0;
+  private secondCuePending = false;
+  private nextRipAt = 200 + Math.random() * 200;
 
   constructor(private readonly peaks: FilmPeaks) {}
 
@@ -52,7 +60,7 @@ export class LensDirector {
     Object.assign(goal, neutralLens());
 
     if (gain > 0) {
-      addLens(goal, { grain: 0.22, vignette: 0.42, weave: 0.1, flicker: 0.08, dust: 0.12, scratches: 0.06, halation: 0.45 });
+      addLens(goal, { grain: 0.24, vignette: 0.42, weave: 0.12, flicker: 0.1, dust: 0.14, scratches: 0.14, halation: 0.45, filmLook: 0.85 });
       this.updateIncidents(goal, now, input.intensity);
     } else {
       addLens(goal, { vignette: 0.25, halation: 1 });
@@ -71,9 +79,11 @@ export class LensDirector {
 
     for (const key of FILM_DEFECTS) goal[key] *= gain === 0 ? (key === 'vignette' ? 1 : 0.35) : gain;
     goal.defocus = Math.min(goal.defocus, 0.03);
+    goal.filmLook = Math.min(goal.filmLook, 1);
 
     dampLens(this.smoothed, goal, realSeconds, RESPONSIVENESS_PER_SECOND);
     Object.assign(this.params, this.smoothed);
+    this.params.cueMark = gain > 0 && now < this.cueShownUntil ? 1 : 0;
     this.applyPeaks(input.peak);
     return this.params;
   }
@@ -87,8 +97,8 @@ export class LensDirector {
         { dust: 0.9 },
         { defocus: 0.0045 },
         { flicker: 0.9 },
-        { tear: 0.25, aberration: 0.003 },
         { lightLeak: 0.45 },
+        ...(frequent ? [{ tear: 0.25, aberration: 0.003 }] : []),
       ];
       this.incident = { until: now + 0.8 + Math.random() * 1.4, lens: incidents[Math.floor(Math.random() * incidents.length)] };
       this.nextIncidentAt = now + (frequent ? 4 : 9) + Math.random() * (frequent ? 8 : 16);
@@ -96,6 +106,16 @@ export class LensDirector {
     if (this.incident) {
       addLens(goal, this.incident.lens);
       if (now > this.incident.until) this.incident = null;
+    }
+    if (now >= this.nextCueAt) {
+      this.cueShownUntil = now + CUE_MARK_SECONDS;
+      // Метки идут парой; после второй следующая пара — через минуту-две.
+      this.nextCueAt = this.secondCuePending ? now + 60 + Math.random() * 90 : now + CUE_MARK_GAP_SECONDS;
+      this.secondCuePending = !this.secondCuePending;
+    }
+    if (now >= this.nextRipAt) {
+      this.peaks.triggerRip(now, frequent ? 1 : 0.7);
+      this.nextRipAt = now + (frequent ? 120 : 260) + Math.random() * 180;
     }
     if (now >= this.nextSignalDropAt) {
       this.peaks.trigger('static', now, { duration: 0.45, strength: 0.55 });
@@ -141,7 +161,7 @@ export class LensDirector {
     const c = closeness;
     switch (id) {
       case 'jupiter':
-        addLens(goal, { hotPixels: c * 1.3, grain: c * 0.25, signalLoss: c * 0.08 });
+        addLens(goal, { hotPixels: c * 0.6, grain: c * 0.25, signalLoss: c * 0.06 });
         break;
       case 'saturn':
         addLens(goal, { dust: c * 0.7, halation: c * 0.2 });
@@ -178,5 +198,7 @@ export class LensDirector {
     p.tear += peak.static * 0.8;
     p.signalLoss = Math.min(1, p.signalLoss + peak.static * 0.45);
     p.weave += peak.static * 1.5 + Math.abs(peak.shakeX + peak.shakeY) * 80;
+    p.rip = peak.rip;
+    if (peak.rip > 0) p.ripAngle = peak.ripAngle;
   }
 }

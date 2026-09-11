@@ -12,8 +12,6 @@ export type BodyInfo = {
   parent: BodyId | null;
   description: string;
   facts: { label: string; value: string }[];
-  /** Кольца, радиусы от центра, км. */
-  rings?: { innerKm: number; outerKm: number; color: string; opacity: number };
 };
 
 export const BODIES: BodyInfo[] = [
@@ -102,7 +100,6 @@ export const BODIES: BodyInfo[] = [
       { label: 'Сутки', value: '10 ч 34 мин' },
       { label: 'Спутники', value: '274' },
     ],
-    rings: { innerKm: 74_500, outerKm: 136_780, color: '#e8d2a6', opacity: 0.92 },
   },
   {
     id: 'uranus', name: 'Уран', kind: 'Ледяной гигант', color: '#8fc3c9', radiusKm: 25_362, parent: 'sun',
@@ -114,7 +111,6 @@ export const BODIES: BodyInfo[] = [
       { label: 'Наклон оси', value: '97,8°' },
       { label: 'Спутники', value: '29' },
     ],
-    rings: { innerKm: 38_000, outerKm: 51_150, color: '#9fb4b6', opacity: 0.28 },
   },
   {
     id: 'neptune', name: 'Нептун', kind: 'Ледяной гигант', color: '#4f78c4', radiusKm: 24_622, parent: 'sun',

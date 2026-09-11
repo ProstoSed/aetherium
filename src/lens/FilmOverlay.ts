@@ -21,6 +21,9 @@ const FRAGMENT = `
   uniform vec2 burnCenter;
   uniform float roll;
   uniform float staticAmount;
+  uniform float rip;
+  uniform float ripAngle;
+  uniform float cueMark;
   varying vec2 vUv;
 
   float hash12(vec2 p) {
@@ -83,6 +86,30 @@ const FRAGMENT = `
       alpha = max(alpha, aboveSeam * 0.92);
     }
 
+    // Разрыв проходит и по интерфейсу: светлая щель с тёмными рваными краями.
+    if (rip > 0.001) {
+      vec2 c = (vUv - 0.5) * vec2(aspect, 1.0);
+      vec2 direction = vec2(cos(ripAngle), sin(ripAngle));
+      float along = dot(c, direction);
+      float across = dot(c, vec2(-direction.y, direction.x));
+      float jag = (valueNoise(vec2(along * 18.0, ripAngle * 10.0)) - 0.5) * 0.022 + (valueNoise(vec2(along * 160.0, ripAngle)) - 0.5) * 0.005;
+      float d = abs(across + jag);
+      float gap = 1.0 - smoothstep(0.0, 0.0015 + rip * 0.006, d);
+      float edge = (1.0 - smoothstep(0.0, 0.012, d)) * (1.0 - gap) * rip;
+      color = mix(color, vec3(1.0, 0.96, 0.86), gap);
+      alpha = max(alpha, max(gap, edge * 0.55));
+    }
+
+    // Метка смены части: кружок в правом верхнем углу на четыре кадра — поверх всего, как на копии фильма.
+    if (cueMark > 0.5) {
+      vec2 p = (screen - vec2(0.91, 0.16)) * vec2(aspect, 1.0);
+      float radius = 0.026 + (valueNoise(normalize(p + 1e-5) * 5.0 + frame) - 0.5) * 0.004;
+      float disc = 1.0 - smoothstep(radius - 0.003, radius, length(p));
+      float rim = exp(-pow((length(p) - radius) * 220.0, 2.0));
+      color = mix(color, vec3(0.93, 0.9, 0.83), disc * 0.9);
+      alpha = max(alpha, max(disc * 0.9, rim * 0.8));
+    }
+
     if (whiteout > 0.001) {
       color = mix(color, vec3(1.0, 0.98, 0.94), whiteout);
       alpha = max(alpha, whiteout);
@@ -125,14 +152,15 @@ export class FilmOverlay {
     const location = gl.getAttribLocation(program, 'position');
     gl.enableVertexAttribArray(location);
     gl.vertexAttribPointer(location, 2, gl.FLOAT, false, 0, 0);
-    for (const name of ['resolution', 'time', 'whiteout', 'burn', 'burnCenter', 'roll', 'staticAmount']) {
+    for (const name of ['resolution', 'time', 'whiteout', 'burn', 'burnCenter', 'roll', 'staticAmount', 'rip', 'ripAngle', 'cueMark']) {
       this.uniforms[name] = gl.getUniformLocation(program, name);
     }
   }
 
-  update(peak: PeakState, time: number) {
-    const active = peak.whiteout > 0.001 || peak.burn > 0.001 || peak.roll > 0.001 || peak.static > 0.001;
-    this.styleHud(peak, active);
+  update(peak: PeakState, time: number, cueMark: boolean) {
+    const hudActive = peak.whiteout > 0.001 || peak.burn > 0.001 || peak.roll > 0.001 || peak.static > 0.001 || peak.rip > 0.001;
+    const active = hudActive || cueMark;
+    this.styleHud(peak, hudActive);
     if (!active) {
       if (this.visible) {
         this.canvas.style.display = 'none';
@@ -162,6 +190,9 @@ export class FilmOverlay {
     gl.uniform2f(this.uniforms.burnCenter, peak.burnX, peak.burnY);
     gl.uniform1f(this.uniforms.roll, peak.roll);
     gl.uniform1f(this.uniforms.staticAmount, peak.static);
+    gl.uniform1f(this.uniforms.rip, peak.rip);
+    gl.uniform1f(this.uniforms.ripAngle, peak.ripAngle);
+    gl.uniform1f(this.uniforms.cueMark, cueMark ? 1 : 0);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLES, 0, 3);

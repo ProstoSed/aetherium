@@ -13,6 +13,7 @@ export const SPEED_PRESETS: SpeedPreset[] = [
   { id: 'month', label: '1 месяц/с', daysPerSecond: 30.44 },
   { id: 'year', label: '1 год/с', daysPerSecond: 365.25 },
   { id: 'decade', label: '10 лет/с', daysPerSecond: 3652.5 },
+  { id: 'century', label: '100 лет/с', daysPerSecond: 36_525 },
   { id: 'millennium', label: '1000 лет/с', daysPerSecond: 365_250 },
 ];
 

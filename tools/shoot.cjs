@@ -22,7 +22,11 @@ fs.mkdirSync(outDir, { recursive: true });
   await page.waitForTimeout(900);
   if (want('intro')) await shot('intro');
   await page.keyboard.press('Shift');
-  await page.waitForTimeout(2500);
+  // Сцена показывается после запекания поверхностей; в dev-сборке движок доступен как window.observatory.
+  const readyStarted = Date.now();
+  await page.waitForFunction(() => window.observatory && window.observatory.store.get().ready, null, { timeout: 120000 }).catch(() => {});
+  console.log('ready after', Date.now() - readyStarted, 'ms');
+  await page.waitForTimeout(1500);
   if (want('overview')) await shot('overview');
 
   if (want('earth')) {

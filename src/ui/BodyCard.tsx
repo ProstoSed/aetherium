@@ -34,7 +34,7 @@ export function BodyCard() {
       </button>
 
       <div className="card-hero">
-        <BodyOrb id={selected} size={76} />
+        <BodyOrb id={selected} size={selected === 'saturn' || selected === 'uranus' ? 104 : 84} />
         <div>
           <p className="card-kind">{body.kind}</p>
           <h2 className="card-name">{body.name}</h2>

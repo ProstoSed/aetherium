@@ -115,10 +115,18 @@ export class LensPass {
     (this.lensMaterial.uniforms.resolution.value as THREE.Vector2).set(width, height);
   }
 
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, params: LensParams, time: number) {
+  /**
+   * Небо рисуется первым и отдельно: после него очищается только глубина, и любое тело
+   * сцены гарантированно закрывает звёзды за собой.
+   */
+  render(renderer: THREE.WebGLRenderer, sky: { scene: THREE.Scene; camera: THREE.Camera }, scene: THREE.Scene, camera: THREE.Camera, params: LensParams, time: number) {
     renderer.setRenderTarget(this.sceneTarget);
+    renderer.autoClear = false;
     renderer.clear();
+    renderer.render(sky.scene, sky.camera);
+    renderer.clearDepth();
     renderer.render(scene, camera);
+    renderer.autoClear = true;
 
     this.renderBloom(renderer);
 
@@ -138,6 +146,27 @@ export class LensPass {
     blur.tSource.value = this.bloomB.texture;
     direction.set(0, 1 / this.bloomB.height);
     this.drawQuad(renderer, this.blurMaterial, this.bloomA);
+  }
+
+  /** Параллельная сборка шейдеров объектива до первого кадра: иначе первый кадр блокирует поток. */
+  async compileAsync(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, sky: { scene: THREE.Scene; camera: THREE.Camera }) {
+    // Каждая программа собирается под ту цель, в которую потом рисует: цель входит в ключ программы.
+    const compileFor = (target: THREE.WebGLRenderTarget | null, compile: () => Promise<unknown>) => {
+      const previous = renderer.getRenderTarget();
+      renderer.setRenderTarget(target);
+      const promise = compile();
+      renderer.setRenderTarget(previous);
+      return promise;
+    };
+    const pending: Promise<unknown>[] = [
+      compileFor(this.sceneTarget, () => renderer.compileAsync(scene, camera)),
+      compileFor(this.sceneTarget, () => renderer.compileAsync(sky.scene, sky.camera)),
+    ];
+    for (const [material, target] of [[this.brightMaterial, this.bloomA], [this.blurMaterial, this.bloomB], [this.lensMaterial, null]] as const) {
+      this.quad.material = material;
+      pending.push(compileFor(target, () => renderer.compileAsync(this.quadScene, this.quadCamera)));
+    }
+    await Promise.all(pending);
   }
 
   private drawQuad(renderer: THREE.WebGLRenderer, material: THREE.Material, target: THREE.WebGLRenderTarget | null) {

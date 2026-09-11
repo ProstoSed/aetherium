@@ -13,7 +13,9 @@ export type PeakKind =
   /** Потеря сигнала: снег, разрывы, дёрганье. */
   | 'static'
   /** Удар: встряска кадра. */
-  | 'shake';
+  | 'shake'
+  /** Разрыв плёнки: половины кадра расходятся по рваной линии, в щели свет лампы. */
+  | 'rip';
 
 export type PeakState = {
   whiteout: number;
@@ -25,12 +27,14 @@ export type PeakState = {
   static: number;
   shakeX: number;
   shakeY: number;
+  rip: number;
+  ripAngle: number;
 };
 
 type Peak = { kind: PeakKind; start: number; duration: number; strength: number; x: number; y: number };
 
 export function emptyPeakState(): PeakState {
-  return { whiteout: 0, burn: 0, burnX: 0.5, burnY: 0.5, roll: 0, static: 0, shakeX: 0, shakeY: 0 };
+  return { whiteout: 0, burn: 0, burnX: 0.5, burnY: 0.5, roll: 0, static: 0, shakeX: 0, shakeY: 0, rip: 0, ripAngle: 0 };
 }
 
 const smoothstep = (a: number, b: number, t: number) => {
@@ -45,12 +49,13 @@ export class FilmPeaks {
 
   trigger(kind: PeakKind, now: number, options: { duration?: number; strength?: number; x?: number; y?: number; delay?: number } = {}) {
     if (this.strength <= 0) return;
-    const defaults: Record<PeakKind, number> = { whiteout: 0.6, burn: 1.8, rollIn: 0.9, static: 0.8, shake: 0.5 };
+    const defaults: Record<PeakKind, number> = { whiteout: 0.6, burn: 1.8, rollIn: 0.9, static: 0.8, shake: 0.5, rip: 1.1 };
     this.peaks.push({
       kind,
       start: now + (options.delay ?? 0),
       duration: options.duration ?? defaults[kind],
       strength: (options.strength ?? 1) * this.strength,
+      // Для разрыва x хранит угол линии: у каждого разрыва свой.
       x: options.x ?? 0.5,
       y: options.y ?? 0.5,
     });
@@ -61,6 +66,13 @@ export class FilmPeaks {
     this.trigger('burn', now, { duration: 1.7, x, y });
     this.trigger('whiteout', now, { delay: 1.3, duration: 0.7 });
     this.trigger('rollIn', now, { delay: 1.75, duration: 1.0 });
+  }
+
+  /** Разрыв под случайным углом, со встряской и коротким снегом. */
+  triggerRip(now: number, strength = 1) {
+    const angle = (Math.random() - 0.5) * 1.2 + (Math.random() < 0.5 ? 0 : Math.PI / 2);
+    this.trigger('rip', now, { duration: 1.2, strength, x: angle });
+    this.trigger('static', now, { duration: 0.35, strength: 0.5 * strength });
   }
 
   /** Короткая смена кадра — маскирует мгновенные переходы, например смену масштаба. */
@@ -102,6 +114,16 @@ export class FilmPeaks {
         case 'static':
           out.static = Math.max(out.static, Math.sin(Math.PI * t) * p.strength);
           break;
+        case 'rip': {
+          // Разрыв возникает рывком и медленнее «затягивается», когда плёнку заправляют заново.
+          const strength = (t < 0.12 ? t / 0.12 : Math.pow(1 - (t - 0.12) / 0.88, 1.6)) * p.strength;
+          if (strength > out.rip) {
+            out.rip = strength;
+            out.ripAngle = p.x;
+          }
+          out.shakeX += Math.sin(now * 83) * 0.006 * strength;
+          break;
+        }
         case 'shake': {
           const decay = (1 - t) ** 2 * p.strength;
           out.shakeX += Math.sin(now * 91) * 0.012 * decay;

@@ -1,12 +1,17 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "aetherium",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "vite build && vite preview --host 127.0.0.1 --port 5178 --open",
+    "sky": "node tools/build-sky.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node tools/run-ts.mjs tests/physics.check.ts",
+    "test:e2e": "node tests/observatory.cjs"
   },
   "dependencies": {
     "@fontsource/cormorant-garamond": "^5.3.0",

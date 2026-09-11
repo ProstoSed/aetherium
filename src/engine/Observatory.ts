@@ -14,7 +14,9 @@ import { createAsteroidBelt } from '../scene/AsteroidBelt';
 import { BodyViews } from '../scene/BodyViews';
 import { Labels } from '../scene/Labels';
 import { OrbitLines } from '../scene/OrbitLines';
-import { createStarfield } from '../scene/Starfield';
+import { SurfaceBaker } from '../scene/planets/SurfaceBaker';
+import { renderThumbnails } from '../scene/planets/thumbnails';
+import { SkyLayer } from '../scene/sky/SkyLayer';
 import { createGlowTexture } from '../scene/textures';
 import { AdaptiveQuality, type QualityMode } from './AdaptiveQuality';
 import { CameraRig, VIEW_DISTANCE_IN_RADII } from './CameraRig';
@@ -36,9 +38,16 @@ export type ObservatoryState = {
   showOrbits: boolean;
   showLabels: boolean;
   showAsteroids: boolean;
+  showConstellations: boolean;
   film: FilmIntensity;
   quality: QualityMode;
   history: HistoryEntry[];
+  /** Запекание поверхностей и компиляция шейдеров, 0…1. */
+  loadProgress: number;
+  /** Сцена готова к показу: поверхности запечены, шейдеры собраны. */
+  ready: boolean;
+  /** Изображения тел для интерфейса (data URL); появляются после запекания. */
+  thumbnails: Partial<Record<BodyId, string>>;
 };
 
 /** Покадровые величины для интерфейса: пишутся прямо в DOM, мимо React. */
@@ -83,6 +92,10 @@ export class Observatory {
     film: 'soft',
     quality: 'auto',
     history: [],
+    showConstellations: true,
+    loadProgress: 0,
+    ready: false,
+    thumbnails: {},
   });
   readonly frameListeners = new Set<(frame: FrameInfo) => void>();
 
@@ -94,7 +107,9 @@ export class Observatory {
   private readonly bodies: BodyViews;
   private readonly orbits = new OrbitLines();
   private readonly belt = createAsteroidBelt();
-  private readonly stars = createStarfield();
+  private readonly baker = new SurfaceBaker();
+  private readonly sky = new SkyLayer();
+  private shadersCompiling = false;
   private readonly labels: Labels;
   private readonly lensPass = new LensPass();
   private readonly peaks = new FilmPeaks();
@@ -120,15 +135,18 @@ export class Observatory {
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;
+    // Проверка ошибок шейдера синхронно ждёт драйвер при первом использовании программы — секунды
+    // блокировки при старте. В разработке она нужна ради сообщений об ошибках, в сборке — нет.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     host.appendChild(this.renderer.domElement);
 
     this.rig = new CameraRig(this.renderer.domElement);
-    this.bodies = new BodyViews(this.clock.julianDate);
+    this.bodies = new BodyViews(this.clock.julianDate, this.baker);
     this.labels = new Labels(labelsLayer, id => this.select(id, true));
     this.overlay = new FilmOverlay(hud);
     document.body.appendChild(this.overlay.canvas);
 
-    this.scene.add(this.stars, this.system, new THREE.AmbientLight(0x8da0c8, AMBIENT_INTENSITY));
+    this.scene.add(this.system, new THREE.AmbientLight(0x8da0c8, AMBIENT_INTENSITY));
     this.system.add(this.bodies.group, this.orbits.group, this.orbits.moonLine.line, this.belt.points);
     for (const id of PLANET_IDS) this.heliocentric.set(id, { x: 0, y: 0, z: 0 });
 
@@ -164,6 +182,8 @@ export class Observatory {
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
     this.animationFrame = requestAnimationFrame(this.tick);
+    // Доступ из консоли и автотестов при разработке; в сборку не попадает.
+    if (import.meta.env.DEV) (window as unknown as { observatory: Observatory }).observatory = this;
   }
 
   // --- Команды интерфейса ---------------------------------------------------
@@ -177,7 +197,17 @@ export class Observatory {
     this.store.set({ focused: id, selected: id });
     const view = this.bodies.views.get(id)!;
     const radiiAway = id === 'saturn' ? VIEW_DISTANCE_IN_RADII * 1.6 : id === 'sun' ? 4 : VIEW_DISTANCE_IN_RADII;
-    this.flyToTarget(id, view.radius * radiiAway);
+    this.flyToTarget(id, view.radius * radiiAway, id === 'sun' ? null : this.threeQuarterView(view.root.position));
+  }
+
+  /**
+   * Направление камеры «на три четверти»: Солнце сбоку-сзади от наблюдателя, видны и день,
+   * и терминатор. Прилёт с ночной стороны показывал бы чёрный круг.
+   */
+  private threeQuarterView(bodyPosition: THREE.Vector3): THREE.Vector3 {
+    const toSun = bodyPosition.clone().negate().normalize();
+    const side = new THREE.Vector3().crossVectors(THREE.Object3D.DEFAULT_UP, toSun).normalize();
+    return toSun.multiplyScalar(0.62).addScaledVector(side, 0.72).add(new THREE.Vector3(0, 0.3, 0)).normalize();
   }
 
   overview() {
@@ -230,7 +260,7 @@ export class Observatory {
     this.events.stop();
   }
 
-  updateSettings(patch: Partial<Pick<ObservatoryState, 'autoEvents' | 'autoInterval' | 'showOrbits' | 'showLabels' | 'showAsteroids' | 'film' | 'quality'>>) {
+  updateSettings(patch: Partial<Pick<ObservatoryState, 'autoEvents' | 'autoInterval' | 'showOrbits' | 'showLabels' | 'showAsteroids' | 'showConstellations' | 'film' | 'quality'>>) {
     this.store.set(patch);
     if (patch.autoInterval !== undefined) this.events.resetCountdown(patch.autoInterval);
     if (patch.quality !== undefined) {
@@ -253,6 +283,10 @@ export class Observatory {
     const state = this.store.get();
 
     this.runPending(now);
+    if (!this.store.get().ready) {
+      this.advanceLoading();
+      return;
+    }
     if (this.quality.sample(realSeconds)) this.resize();
     this.peaks.strength = state.film === 'off' ? 0 : state.film === 'strong' ? 1.2 : 1;
 
@@ -283,10 +317,9 @@ export class Observatory {
     this.bodies.sunLight.intensity = SUN_LIGHT_INTENSITY * this.sunBrightness;
     this.bodies.updateSun(now, this.sunBrightness, camera, cameraToSun);
     camera.updateMatrixWorld();
-    this.bodies.updateAtmospheres(camera);
+    this.bodies.updateLighting(camera, now, this.sunBrightness);
+    this.sky.update(camera, this.renderer.getPixelRatio(), state.showConstellations);
     this.bodies.updateMarkers(camera, this.height, state.scaleMode === 'true' || state.showLabels);
-    (this.stars.material as THREE.ShaderMaterial).uniforms.time.value = now;
-    (this.stars.material as THREE.ShaderMaterial).uniforms.pixelRatio.value = this.renderer.getPixelRatio();
     this.labels.update(this.bodies.views, camera, this.width, this.height, state.selected, state.showLabels);
 
     this.peaks.sample(now, this.peakState);
@@ -302,10 +335,36 @@ export class Observatory {
       peak: this.peakState,
     }, realSeconds, now);
 
-    this.lensPass.render(this.renderer, this.scene, camera, params, now);
-    this.overlay.update(this.peakState, now);
+    this.lensPass.render(this.renderer, this.sky, this.scene, camera, params, now);
+    this.overlay.update(this.peakState, now, params.cueMark > 0.5);
     this.publishFrame(state, realSeconds);
   };
+
+  /**
+   * Пока сцена не готова, кадр тратится только на подготовку: запекание граней, затем
+   * параллельная компиляция шейдеров сцены и неба, затем миниатюры. Сцена не рисуется —
+   * отрисовка до конца компиляции заставила бы браузер собирать шейдеры синхронно.
+   */
+  private advanceLoading() {
+    if (!this.baker.done) {
+      this.baker.step(this.renderer);
+      const progress = Math.round(this.baker.progress * 80) / 100;
+      if (progress !== this.store.get().loadProgress) this.store.set({ loadProgress: progress });
+      return;
+    }
+    if (this.shadersCompiling) return;
+    this.shadersCompiling = true;
+    this.store.set({ loadProgress: 0.85 });
+    const mode = this.store.get().scaleMode;
+    this.updateBodyPositions(mode);
+    this.updateMoon(mode);
+    this.scene.updateMatrixWorld();
+    void this.lensPass.compileAsync(this.renderer, this.scene, this.rig.camera, this.sky).then(() => {
+      const thumbnails = renderThumbnails(this.renderer, this.bodies.views, sun => this.bodies.useThumbnailLighting(sun));
+      this.store.set({ thumbnails, loadProgress: 1, ready: true });
+      this.lastTimestamp = 0;
+    });
+  }
 
   private updateBodyPositions(mode: ScaleMode) {
     const jd = this.clock.julianDate;
@@ -375,10 +434,10 @@ export class Observatory {
     this.updateDistanceLimits();
   }
 
-  private flyToTarget(focus: BodyId | null, distance: number) {
+  private flyToTarget(focus: BodyId | null, distance: number, direction: THREE.Vector3 | null = null) {
     const target = focus ? this.bodies.views.get(focus)!.root.position : new THREE.Vector3();
     this.updateDistanceLimits(focus);
-    this.rig.flyTo(() => target, distance);
+    this.rig.flyTo(() => target, distance, direction);
   }
 
   private updateDistanceLimits(focus = this.store.get().focused) {
@@ -506,6 +565,8 @@ export class Observatory {
     this.labels.dispose();
     this.overlay.dispose();
     this.lensPass.dispose();
+    this.baker.dispose();
+    this.sky.dispose();
     this.scene.traverse(object => {
       const mesh = object as THREE.Mesh;
       mesh.geometry?.dispose();

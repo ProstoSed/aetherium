@@ -10,9 +10,16 @@
   animation: intro-flicker 0.12s steps(2) infinite;
 }
 
-.intro.is-title {
+.intro.phase-title,
+.intro.phase-leaving {
   background: radial-gradient(circle at 50% 50%, #0d0b08 0%, #020202 70%);
-  animation: intro-out 1.5s ease forwards;
+  animation: none;
+  cursor: default;
+}
+
+.intro.phase-leaving {
+  animation: intro-out 0.75s ease forwards;
+  pointer-events: none;
 }
 
 @keyframes intro-flicker {
@@ -20,8 +27,7 @@
 }
 
 @keyframes intro-out {
-  0%, 70% { opacity: 1; }
-  100% { opacity: 0; }
+  to { opacity: 0; filter: brightness(1.6); }
 }
 
 .leader {
@@ -125,6 +131,32 @@
   font-weight: 500;
   letter-spacing: 0.6em;
   margin-right: -0.6em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.intro-progress {
+  position: relative;
+  width: min(280px, 46vw);
+  height: 1px;
+  margin-top: 8px;
+  overflow: hidden;
+  background: rgba(214, 176, 106, 0.18);
+}
+
+.intro-progress span {
+  position: absolute;
+  inset: 0;
+  background: var(--brass-gradient);
+  box-shadow: 0 0 12px rgba(243, 217, 160, 0.8);
+  transform-origin: left;
+  transition: transform 0.35s var(--ease-out);
+}
+
+.intro-status {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--text-soft);
 }

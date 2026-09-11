@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Ambience } from './audio/Ambience';
 import { Observatory } from './engine/Observatory';
 import { BodyCard } from './ui/BodyCard';
@@ -23,17 +23,30 @@ export default function App() {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    let instance: Observatory;
-    try {
-      instance = new Observatory(stageRef.current!, labelsRef.current!, hudRef.current!);
-    } catch (error) {
-      console.error(error);
-      setFailed(true);
-      return;
-    }
-    setObservatory(instance);
-    return () => instance.dispose();
+    let instance: Observatory | null = null;
+    let cancelled = false;
+    // Движок создаётся после того, как заставка успела отрисоваться: иначе его подготовка
+    // пришлась бы на тот же кадр, и отсчёт появился бы с задержкой.
+    const frame = requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (cancelled) return;
+        try {
+          instance = new Observatory(stageRef.current!, labelsRef.current!, hudRef.current!);
+          setObservatory(instance);
+        } catch (error) {
+          console.error(error);
+          setFailed(true);
+        }
+      }, 0);
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(frame);
+      instance?.dispose();
+    };
   }, []);
+
+  const loading = useLoadingState(observatory);
 
   return (
     <div className="app">
@@ -52,9 +65,24 @@ export default function App() {
           </div>
         )}
       </div>
-      <Intro />
+      <Intro progress={loading.progress} ready={loading.ready || failed} />
     </div>
   );
+}
+
+const NOT_LOADED = { progress: 0, ready: false };
+
+/** Прогресс подготовки сцены — для заставки, которая живёт и до создания движка. */
+function useLoadingState(observatory: Observatory | null) {
+  const progress = useSyncExternalStore(
+    listener => observatory?.store.subscribe(listener) ?? (() => {}),
+    () => observatory?.store.get().loadProgress ?? NOT_LOADED.progress,
+  );
+  const ready = useSyncExternalStore(
+    listener => observatory?.store.subscribe(listener) ?? (() => {}),
+    () => observatory?.store.get().ready ?? NOT_LOADED.ready,
+  );
+  return { progress, ready };
 }
 
 function Hud() {

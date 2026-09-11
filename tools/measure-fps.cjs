@@ -23,7 +23,9 @@ const JANK_MS = 20;
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   await page.goto(url, { waitUntil: 'networkidle' });
-  await page.waitForTimeout(3000);
+  // Мерить обычную работу, а не подготовку сцены: заставка уходит, когда всё запечено и собрано.
+  await page.waitForSelector('.intro', { state: 'detached', timeout: 120000 }).catch(() => {});
+  await page.waitForTimeout(2000);
   if (mode === 'weak') {
     const cdp = await page.context().newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_SLOWDOWN });

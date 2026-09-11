@@ -95,7 +95,10 @@ export const blackhole: ScenarioFactory = ({ system, views, glowTexture, peaks, 
       diskMaterial.uniforms.opacity.value = Math.min(1, envelope * 1.5);
       (halo.material as THREE.SpriteMaterial).opacity = envelope * 0.6;
 
-      milestone('horizon-tear', progress, 0.42, () => peaks.trigger('static', time, { duration: 0.9, strength: 0.8 }));
+      milestone('horizon-tear', progress, 0.42, () => {
+        peaks.trigger('static', time, { duration: 0.9, strength: 0.8 });
+        peaks.triggerRip(time, 0.9);
+      });
       milestone('frame-slip', progress, 0.5, () => {
         peaks.trigger('rollIn', time, { duration: 1.0 });
         peaks.trigger('shake', time, { duration: 0.9, strength: 0.9 });

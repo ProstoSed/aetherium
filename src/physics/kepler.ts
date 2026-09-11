@@ -99,7 +99,12 @@ export function orbitalPeriodDays(semiMajorAxisAu: number): number {
 /** Направление северного полюса вращения в осях сцены (единичный вектор). */
 export function poleDirection(id: string): Vec3 {
   const { poleRa, poleDec } = ROTATION[id];
-  const ra = poleRa * DEG, dec = poleDec * DEG, obliquity = OBLIQUITY_J2000 * DEG;
+  return equatorialToScene(poleRa, poleDec);
+}
+
+/** Экваториальные координаты J2000 (RA и Dec в градусах) → единичный вектор в осях сцены. */
+export function equatorialToScene(raDegrees: number, decDegrees: number): Vec3 {
+  const ra = raDegrees * DEG, dec = decDegrees * DEG, obliquity = OBLIQUITY_J2000 * DEG;
   const xe = Math.cos(dec) * Math.cos(ra);
   const ye = Math.cos(dec) * Math.sin(ra);
   const ze = Math.sin(dec);

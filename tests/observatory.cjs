@@ -18,10 +18,13 @@ function expect(name, condition) {
 
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.keyboard.press('Shift');
-  await page.waitForTimeout(2500);
+  // Сцена готова, когда запечены поверхности и собраны шейдеры: заставка уходит сама.
+  await page.waitForSelector('.intro', { state: 'detached', timeout: 120000 });
+  await page.waitForTimeout(800);
 
   expect('холст сцены создан', await page.locator('.stage canvas').count() === 1);
   expect('подписи тел видны', await page.locator('.scene-label.is-visible').count() >= 5);
+  expect('миниатюры тел отрисованы', await page.locator('.rail-item .orb-image').count() === 10);
 
   await page.locator('.rail-item', { hasText: 'Земля' }).click();
   await page.waitForTimeout(600);

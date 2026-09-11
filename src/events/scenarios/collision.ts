@@ -67,7 +67,7 @@ export const collision: ScenarioFactory = ({ system, views, glowTexture, peaks, 
         const screen = project(meetingPoint);
         peaks.trigger('shake', time, { duration: 1.2, strength: 1 });
         if (screen.onScreen) peaks.trigger('burn', time, { duration: 1.4, strength: 0.45, x: screen.x, y: screen.y });
-        peaks.trigger('static', time, { delay: 0.25, duration: 0.6, strength: 0.6 });
+        peaks.triggerRip(time + 0.2, 1);
       });
 
       return {

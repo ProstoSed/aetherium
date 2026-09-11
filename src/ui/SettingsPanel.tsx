@@ -37,6 +37,7 @@ export function SettingsPanel() {
       <Switch label="Орбиты" hint="Настоящие эллипсы на текущую дату" checked={s.showOrbits} onChange={v => update({ showOrbits: v })} />
       <Switch label="Подписи" hint="Названия тел в сцене" checked={s.showLabels} onChange={v => update({ showLabels: v })} />
       <Switch label="Пояс астероидов" hint="7000 тел со своими орбитами" checked={s.showAsteroids} onChange={v => update({ showAsteroids: v })} />
+      <Switch label="Созвездия" hint="Линии и названия по каталогу МАС" checked={s.showConstellations} onChange={v => update({ showConstellations: v })} />
 
       <h3 className="panel-title">Плёнка и объектив</h3>
       <Segmented<FilmIntensity> label="Сила помех" value={s.film} onChange={v => update({ film: v })}
