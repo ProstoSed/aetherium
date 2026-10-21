@@ -1,4 +1,7 @@
 import type { BodyId } from '../../data/bodies';
+import earthColorUrl from '../../assets/earth/color.jpg';
+import earthElevationUrl from '../../assets/earth/elevation.jpg';
+import earthNightUrl from '../../assets/earth/night.jpg';
 
 /**
  * Генераторы поверхностей в GLSL. Каждый получает точку p на единичной сфере и возвращает
@@ -6,7 +9,8 @@ import type { BodyId } from '../../data/bodies';
  * моря и лучевой кратер Луны, шапки и каньон Марса, Большое Красное Пятно, шестиугольник
  * Сатурна, Большое Тёмное Пятно Нептуна. Это не карты: расположение деталей условное.
  *
- * Земля дополнительно печёт карту свойств (шероховатость, огни городов, суша) и облака.
+ * Земля — исключение: её цвет, рельеф и огни городов берутся из снимков NASA. Она же
+ * дополнительно печёт карту свойств (шероховатость, огни, суша) и процедурные облака.
  */
 export type SurfaceRecipe = {
   /** Размер грани кубической карты. */
@@ -16,7 +20,11 @@ export type SurfaceRecipe = {
   glsl: string;
   extraGlsl?: string;
   cloudsGlsl?: string;
+  /** Карты в равнопромежуточной проекции: имя uniform → адрес и число строк (для мип-уровня). */
+  maps?: Record<string, SurfaceMap>;
 };
+
+export type SurfaceMap = { url: string; rows: number };
 
 const MERCURY = /* glsl */ `
   void generateSurface(vec3 p, out vec3 albedo, out float height) {
@@ -89,71 +97,74 @@ const VENUS = /* glsl */ `
   }
 `;
 
-const EARTH_COMMON = /* glsl */ `
-  const float SEA_LEVEL = 0.1;
-  float earthElevation(vec3 p) {
-    vec3 q = warp(p * 1.35, 0.5, 5);
-    float e = fbm(q, 8);
-    e += ridged(p * 3.6, 7) * 0.22 * smoothstep(0.0, 0.25, e);
-    return e;
+/**
+ * Земля печётся из снимков NASA в равнопромежуточной проекции (см. tools/build-earth.cjs).
+ * В объектных координатах поверхности нулевой меридиан лежит по +X, северный полюс — по +Y,
+ * восточная долгота растёт к −Z (так поворачивает ось вращения в BodyViews).
+ */
+const EARTH_MAPS = /* glsl */ `
+  uniform sampler2D colorMap;
+  uniform sampler2D elevationMap;
+  uniform sampler2D nightMap;
+  uniform float cubeTexelAngle;
+  const float PI = 3.14159265;
+
+  vec2 equirectUv(vec3 p) {
+    float longitude = atan(-p.z, p.x);
+    float latitude = asin(clamp(p.y, -1.0, 1.0));
+    return vec2(longitude / (2.0 * PI) + 0.5, latitude / PI + 0.5);
   }
-  float earthTemperature(vec3 p, float elevation) {
-    return 1.0 - abs(p.y) * 1.2 - max(elevation - SEA_LEVEL, 0.0) * 1.6 + snoise(p * 3.0) * 0.07;
+
+  // Мип-уровень под размер ячейки куба: у полюсов строка карты сжата по долготе в cos φ раз,
+  // и без него на льдах видна рябь. Уровень считается явно — производные ломаются на шве ±180°.
+  vec4 sampleMap(sampler2D map, vec3 p, float mapHeight) {
+    float sourceTexel = PI / mapHeight;
+    float squeeze = max(sqrt(max(1.0 - p.y * p.y, 0.0)), 0.05);
+    float lod = log2(max(cubeTexelAngle / (sourceTexel * squeeze), 1.0));
+    return textureLod(map, equirectUv(p), lod);
+  }
+
+  // Высоты в карте 8-битные: шаг квантования, усиленный рельефным освещением, рисует на склонах
+  // контурные террасы. Сглаживание 3×3 с весами 1-2-1 на шаге в полторы ячейки их убирает.
+  float elevationAt(vec3 p) {
+    vec3 tangent = normalize(cross(p, abs(p.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 bitangent = cross(p, tangent);
+    float step = 1.5 * PI / ELEVATION_ROWS;
+    float sum = 0.0;
+    for (int i = -1; i <= 1; i++) {
+      for (int j = -1; j <= 1; j++) {
+        float weight = (2.0 - abs(float(i))) * (2.0 - abs(float(j)));
+        sum += weight * sampleMap(elevationMap, normalize(p + (tangent * float(i) + bitangent * float(j)) * step), ELEVATION_ROWS).r;
+      }
+    }
+    return sum / 16.0;
+  }
+
+  // Вода: синий преобладает над красным и зелёным, а высота суши нулевая. Доля такой
+  // поверхности на карте — 70,6 %, как у настоящего океана (71 %).
+  float waterAt(vec3 p, vec3 color, float elevation) {
+    return smoothstep(0.01, 0.05, color.b - max(color.r, color.g)) * (1.0 - smoothstep(0.004, 0.012, elevation));
   }
 `;
 
-const EARTH = EARTH_COMMON + /* glsl */ `
+const EARTH = EARTH_MAPS + /* glsl */ `
   void generateSurface(vec3 p, out vec3 albedo, out float height) {
-    float e = earthElevation(p);
-    float land = smoothstep(SEA_LEVEL, SEA_LEVEL + 0.008, e);
-    float temperature = earthTemperature(p, e);
-    float latitude = abs(p.y);
-    float moisture = fbm(p * 2.4 + 11.0, 6) * 0.5 + 0.5 - exp(-pow((latitude - 0.45) * 6.0, 2.0)) * 0.28;
-
-    vec3 deep = vec3(0.012, 0.055, 0.15);
-    vec3 shallow = vec3(0.03, 0.22, 0.34);
-    vec3 ocean = mix(deep, shallow, smoothstep(SEA_LEVEL - 0.22, SEA_LEVEL, e));
-
-    vec3 desert = vec3(0.80, 0.66, 0.45);
-    vec3 steppe = vec3(0.56, 0.52, 0.33);
-    vec3 forest = vec3(0.12, 0.25, 0.09);
-    vec3 jungle = vec3(0.06, 0.19, 0.06);
-    vec3 tundra = vec3(0.43, 0.41, 0.34);
-    vec3 rock = vec3(0.40, 0.35, 0.30);
-    vec3 snow = vec3(0.94, 0.95, 0.97);
-
-    vec3 vegetation = mix(forest, jungle, smoothstep(0.62, 0.95, temperature));
-    vec3 dry = mix(steppe, desert, smoothstep(0.55, 0.85, temperature));
-    vec3 ground = mix(dry, vegetation, smoothstep(0.38, 0.62, moisture));
-    ground = mix(tundra, ground, smoothstep(0.12, 0.34, temperature));
-    ground = mix(ground, rock, smoothstep(0.24, 0.42, e));
-    ground *= 0.84 + fbm(p * 48.0, 4) * 0.16;
-
-    vec3 color = mix(ocean, ground, land);
-    float ice = max(smoothstep(0.05, -0.02, temperature), smoothstep(0.84, 0.88, latitude + snoise(p * 7.0) * 0.03));
-    color = mix(color, snow, ice);
-    // Снег на вершинах.
-    color = mix(color, snow, smoothstep(0.42, 0.55, e) * land);
-    albedo = color;
-    height = 0.5 + max(e - SEA_LEVEL, 0.0) * 0.06 * land;
+    albedo = sampleMap(colorMap, p, COLOR_ROWS).rgb;
+    height = 0.5 + elevationAt(p) * 0.03;
   }
 `;
 
-const EARTH_EXTRA = EARTH_COMMON + /* glsl */ `
+const EARTH_EXTRA = EARTH_MAPS + /* glsl */ `
   void generateExtra(vec3 p, out vec4 extra) {
-    float e = earthElevation(p);
-    float land = smoothstep(SEA_LEVEL, SEA_LEVEL + 0.008, e);
-    float latitude = abs(p.y);
-    float temperature = earthTemperature(p, e);
-    float ice = max(smoothstep(0.05, -0.02, temperature), smoothstep(0.84, 0.88, latitude));
-    float roughness = mix(0.16, 0.92, max(land, ice));
-    // Города гуще на побережьях и в умеренном поясе, собраны в скопления.
-    float coast = exp(-abs(e - SEA_LEVEL) * 28.0);
-    float region = smoothstep(0.05, 0.45, fbm(p * 2.6 + 40.0, 4)) * smoothstep(0.78, 0.25, latitude) * land * (1.0 - ice);
-    float clusters = smoothstep(0.55, 0.92, fbm(p * 16.0 + 3.0, 4) * 0.5 + 0.5);
-    float sparks = step(0.8, hash13(floor(p * 520.0)));
-    float lights = region * (clusters * 0.9 + coast * 0.6) * (0.25 + sparks);
-    extra = vec4(roughness, clamp(lights, 0.0, 1.0), land, 1.0);
+    vec3 color = sampleMap(colorMap, p, COLOR_ROWS).rgb;
+    float water = waterAt(p, color, elevationAt(p));
+    float ice = smoothstep(0.75, 0.9, min(color.r, min(color.g, color.b)));
+    // Ночной снимок: суша без огней там тёмно-синяя (37, 34, 63), огни — тёплые. Разность красного
+    // и синего отделяет даже тусклые городки от фона, который ярче их по синему каналу.
+    vec3 night = sampleMap(nightMap, p, NIGHT_ROWS).rgb;
+    float lights = smoothstep(0.02, 0.5, night.r - night.b * 0.6);
+    float roughness = mix(0.92, 0.08, water * (1.0 - ice));
+    extra = vec4(roughness, lights, 1.0 - water, 1.0);
   }
 `;
 
@@ -165,7 +176,7 @@ const EARTH_CLOUDS = /* glsl */ `
     // Облачность гуще у экватора и в поясах циклонов умеренных широт, реже в субтропиках.
     float belts = 0.52 + 0.22 * exp(-pow(latitude * 8.0, 2.0)) + 0.26 * exp(-pow((latitude - 0.78) * 5.0, 2.0))
                 - 0.2 * exp(-pow((latitude - 0.42) * 6.0, 2.0));
-    return smoothstep(0.56, 0.86, n * belts + 0.18);
+    return smoothstep(0.5, 0.82, n * belts + 0.18);
   }
 `;
 
@@ -252,13 +263,25 @@ const NEPTUNE = /* glsl */ `
 `;
 
 /**
- * Размеры граней подобраны по видеопамяти: вместе с мип-уровнями все карты занимают ~130 МБ.
+ * Размеры граней подобраны по видеопамяти: вместе с мип-уровнями все карты занимают ~160 МБ.
  * Рельефным телам нужен half float (вдвое дороже), поэтому они мельче газовых гигантов.
+ * Грань Земли в 1024 точки по угловому шагу равна карте цвета (4096 по долготе) на экваторе.
  */
 export const SURFACE_RECIPES: Partial<Record<BodyId, SurfaceRecipe>> = {
   mercury: { faceSize: 384, relief: true, glsl: MERCURY },
   venus: { faceSize: 384, relief: false, glsl: VENUS },
-  earth: { faceSize: 768, relief: true, glsl: EARTH, extraGlsl: EARTH_EXTRA, cloudsGlsl: EARTH_CLOUDS },
+  earth: {
+    faceSize: 1024,
+    relief: true,
+    glsl: EARTH,
+    extraGlsl: EARTH_EXTRA,
+    cloudsGlsl: EARTH_CLOUDS,
+    maps: {
+      colorMap: { url: earthColorUrl, rows: 2048 },
+      elevationMap: { url: earthElevationUrl, rows: 1024 },
+      nightMap: { url: earthNightUrl, rows: 1024 },
+    },
+  },
   moon: { faceSize: 384, relief: true, glsl: MOON },
   mars: { faceSize: 512, relief: true, glsl: MARS },
   jupiter: { faceSize: 768, relief: false, glsl: JUPITER },

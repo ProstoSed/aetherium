@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { BodyId } from '../../data/bodies';
 import { NOISE_GLSL } from './noiseGlsl';
-import { EXTRA_FACE_SHARE, SURFACE_RECIPES } from './surfaceGenerators';
+import { EXTRA_FACE_SHARE, SURFACE_RECIPES, type SurfaceMap } from './surfaceGenerators';
 
 export type BakedSurface = {
   surface: THREE.WebGLCubeRenderTarget;
@@ -12,7 +12,17 @@ export type BakedSurface = {
 };
 
 type Output = 'surface' | 'extra' | 'clouds';
-type Job = { target: THREE.WebGLCubeRenderTarget; material: THREE.ShaderMaterial; face: number; compiled: Promise<void> | null; ready: boolean };
+type LoadedMaps = { uniforms: Record<string, THREE.IUniform>; defines: Record<string, string>; loaded: Promise<unknown> };
+const NO_MAPS: LoadedMaps = { uniforms: {}, defines: {}, loaded: Promise.resolve() };
+type Job = {
+  target: THREE.WebGLCubeRenderTarget;
+  material: THREE.ShaderMaterial;
+  face: number;
+  /** Карты, без которых грань печь нельзя: пока они грузятся, грань ждёт. */
+  maps: Promise<unknown>;
+  compiled: Promise<void> | null;
+  ready: boolean;
+};
 
 /** Граней за кадр. Одна тяжёлая грань Земли — десятки миллисекунд работы видеокарты на слабой машине. */
 const FACES_PER_FRAME = 2;
@@ -42,7 +52,9 @@ const MAIN_BY_OUTPUT: Record<Output, string> = {
       vec3 albedo;
       float height;
       generateSurface(p, albedo, height);
-      gl_FragColor = vec4(clamp(albedo, 0.0, 1.0), height);
+      // Генераторы отсчитывают высоту от 0,5, а half float у нуля в сотни раз точнее, чем у 0,5
+      // (шаг 2^-11 там съедает весь рельеф Земли за ~60 ступеней). Рельефу нужны только разности.
+      gl_FragColor = vec4(clamp(albedo, 0.0, 1.0), height - 0.5);
     }
   `,
   extra: /* glsl */ `
@@ -71,6 +83,11 @@ export class SurfaceBaker {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private readonly totalJobs: number;
+  // Картинка декодируется вне главного потока (createImageBitmap): декодирование карты 4096×2048
+  // через <img> при первой загрузке в текстуру занимает главный поток на ~0,1 с. Переворот по
+  // вертикали делается там же — у ImageBitmap three.js его не выполняет.
+  private readonly loader = new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY' });
+  private readonly loadedMaps: THREE.Texture[] = [];
 
   constructor(sizeScale = 1) {
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -84,14 +101,15 @@ export class SurfaceBaker {
         faceSize,
         relief: recipe.relief,
       };
-      this.addJobs(baked.surface, recipe.glsl, 'surface');
+      const maps = this.loadMaps(recipe.maps ?? {});
+      this.addJobs(baked.surface, recipe.glsl, 'surface', maps);
       if (recipe.extraGlsl) {
         baked.extra = this.createTarget(Math.round(faceSize * EXTRA_FACE_SHARE), THREE.UnsignedByteType);
-        this.addJobs(baked.extra, recipe.extraGlsl, 'extra');
+        this.addJobs(baked.extra, recipe.extraGlsl, 'extra', maps);
       }
       if (recipe.cloudsGlsl) {
         baked.clouds = this.createTarget(Math.round(faceSize * EXTRA_FACE_SHARE), THREE.UnsignedByteType);
-        this.addJobs(baked.clouds, recipe.cloudsGlsl, 'clouds');
+        this.addJobs(baked.clouds, recipe.cloudsGlsl, 'clouds', NO_MAPS);
       }
       this.surfaces.set(id, baked);
     }
@@ -116,9 +134,38 @@ export class SurfaceBaker {
     });
   }
 
-  private addJobs(target: THREE.WebGLCubeRenderTarget, generator: string, output: Output) {
+  /**
+   * Карты читаются как есть, без перевода из sRGB: генераторы и так отдают цвет в гамме sRGB.
+   * По долготе карта замкнута (повтор), по широте — нет.
+   */
+  private loadMaps(maps: Record<string, SurfaceMap>): LoadedMaps {
+    const uniforms: Record<string, THREE.IUniform> = {};
+    const defines: Record<string, string> = {};
+    const loads: Promise<unknown>[] = [];
+    for (const [name, map] of Object.entries(maps)) {
+      const texture = new THREE.Texture();
+      texture.flipY = false;
+      loads.push(this.loader.loadAsync(map.url).then(bitmap => {
+        texture.image = bitmap;
+        texture.needsUpdate = true;
+      }, () => {
+        throw new Error(`Surface map failed to load: ${map.url}`);
+      }));
+      texture.colorSpace = THREE.NoColorSpace;
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      this.loadedMaps.push(texture);
+      uniforms[name] = { value: texture };
+      defines[`${name.replace(/Map$/, '').toUpperCase()}_ROWS`] = map.rows.toFixed(1);
+    }
+    return { uniforms, defines, loaded: Promise.all(loads) };
+  }
+
+  private addJobs(target: THREE.WebGLCubeRenderTarget, generator: string, output: Output, maps: LoadedMaps) {
     const material = new THREE.ShaderMaterial({
-      uniforms: { face: { value: 0 } },
+      uniforms: { face: { value: 0 }, cubeTexelAngle: { value: Math.PI / 2 / target.width }, ...maps.uniforms },
+      defines: maps.defines,
       vertexShader: /* glsl */ `
         varying vec2 vUv;
         void main() {
@@ -130,7 +177,7 @@ export class SurfaceBaker {
       depthTest: false,
       depthWrite: false,
     });
-    for (let face = 0; face < 6; face++) this.jobs.push({ target, material, face, compiled: null, ready: false });
+    for (let face = 0; face < 6; face++) this.jobs.push({ target, material, face, maps: maps.loaded, compiled: null, ready: false });
   }
 
   /** Вызывается раз в кадр. Возвращает true, когда всё запечено. */
@@ -145,7 +192,7 @@ export class SurfaceBaker {
           // Собранная под экран, при записи в кубическую карту она пересобралась бы синхронно.
           const previous = renderer.getRenderTarget();
           renderer.setRenderTarget(job.target, job.face);
-          job.compiled = renderer.compileAsync(this.scene, this.camera).then(() => {
+          job.compiled = Promise.all([renderer.compileAsync(this.scene, this.camera), job.maps]).then(() => {
             for (const other of this.jobs) if (other.material === job.material) other.ready = true;
           });
           renderer.setRenderTarget(previous);
@@ -172,5 +219,6 @@ export class SurfaceBaker {
       baked.clouds?.dispose();
     }
     this.quad.geometry.dispose();
+    for (const texture of this.loadedMaps) texture.dispose();
   }
 }

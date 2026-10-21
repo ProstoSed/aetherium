@@ -1,6 +1,6 @@
 // Сверка орбитальной механики с наблюдаемыми датами.
 // Запуск: node tools/run-ts.mjs tests/physics.check.ts
-import { eclipticLongitudeDegrees, heliocentricPosition, length, moonGeocentricKm } from '../src/physics/kepler';
+import { eclipticLongitudeDegrees, heliocentricPosition, length, meridianAngle, meridianOriginDirection, moonGeocentricKm, poleDirection, type Vec3 } from '../src/physics/kepler';
 import { julianDateFromDate } from '../src/physics/time';
 
 let failed = 0;
@@ -41,6 +41,25 @@ const earthLongitude = eclipticLongitudeDegrees(heliocentricPosition('earth', ec
 check('Луна против Солнца в затмение', angleGap(eclipticLongitudeDegrees(moon), earthLongitude), 0, 3, '°');
 check('Луна у узла в затмение (широта)', Math.abs(Math.asin(moon.y / length(moon)) * 180 / Math.PI), 0, 1, '°');
 check('Расстояние до Луны', length(moon), 370_000, 25_000, 'км');
+
+// Подсолнечная точка: в 12:00 UTC Солнце над Гринвичем с поправкой на уравнение времени.
+// 20.03.2026 уравнение времени ≈ −7,5 мин: Солнце кульминирует позже полудня и стоит ~1,9° к востоку.
+{
+  const at = jd('2026-03-20T12:00Z');
+  const pole = poleDirection('earth');
+  const origin = meridianOriginDirection('earth');
+  const cross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+  const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z;
+  // Поворот на W вокруг полюса переводит опорное направление X в X·cosW − Z·sinW, где Z = X × полюс.
+  const w = meridianAngle('earth', at);
+  const z = cross(origin, pole);
+  const greenwich = { x: origin.x * Math.cos(w) - z.x * Math.sin(w), y: origin.y * Math.cos(w) - z.y * Math.sin(w), z: origin.z * Math.cos(w) - z.z * Math.sin(w) };
+  const earth = heliocentricPosition('earth', at);
+  const toSun = { x: -earth.x, y: -earth.y, z: -earth.z };
+  const east = cross(pole, greenwich);
+  const subsolarLongitude = Math.atan2(dot(toSun, east), dot(toSun, greenwich)) * 180 / Math.PI;
+  check('Подсолнечная долгота в 12:00 UTC 20.03.2026', subsolarLongitude, 1.9, 1.5, '°');
+}
 
 if (failed) {
   console.log(`\nПровалено проверок: ${failed}`);

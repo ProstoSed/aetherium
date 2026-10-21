@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { BODIES, type BodyId, type BodyInfo } from '../data/bodies';
 import { ROTATION } from '../data/orbitalElements';
-import { meridianAngle, poleDirection } from '../physics/kepler';
+import { meridianAngle, meridianOriginDirection, poleDirection } from '../physics/kepler';
 import { bodyRadius, type ScaleMode } from '../physics/scale';
 import { createPlanetMaterial, SUN_INTENSITY } from './planets/planetMaterial';
 import { createRingMaterial, createRingTexture, RING_PROFILES } from './planets/rings';
@@ -23,6 +23,20 @@ const ATMOSPHERE_SHELLS: Partial<Record<BodyId, { color: number; thickness: numb
   venus: { color: 0xf2d49a, thickness: 1.04 },
   mars: { color: 0xe0a07a, thickness: 1.012 },
 };
+
+/**
+ * Базис оси тела: Y — северный полюс, X — направление, от которого отсчитывается нулевой
+ * меридиан. Поворот поверхности на W вокруг Y тогда ставит нулевой меридиан туда, где он есть
+ * на самом деле, — у Земли в 12:00 UTC Солнце стоит над Гринвичем.
+ */
+function axisOrientation(id: BodyId): THREE.Quaternion {
+  const poleVector = poleDirection(id);
+  const originVector = meridianOriginDirection(id);
+  const y = new THREE.Vector3(poleVector.x, poleVector.y, poleVector.z);
+  const x = new THREE.Vector3(originVector.x, originVector.y, originVector.z).addScaledVector(y, -new THREE.Vector3(originVector.x, originVector.y, originVector.z).dot(y)).normalize();
+  const z = new THREE.Vector3().crossVectors(x, y);
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+}
 
 export type BodyView = {
   info: BodyInfo;
@@ -110,8 +124,7 @@ export class BodyViews {
     const root = new THREE.Group();
     root.name = info.id;
     const axis = new THREE.Group();
-    const pole = poleDirection(info.id);
-    axis.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(pole.x, pole.y, pole.z));
+    axis.quaternion.copy(axisOrientation(info.id));
     root.add(axis);
 
     const ringProfile = RING_PROFILES[info.id];

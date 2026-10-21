@@ -26,7 +26,7 @@ export type PlanetLook = {
 export const PLANET_LOOKS: Partial<Record<BodyId, PlanetLook>> = {
   mercury: { atmosphere: [0, 0, 0], atmosphereDensity: 0, bumpStrength: 0.55 },
   venus: { atmosphere: [1.0, 0.82, 0.5], atmosphereDensity: 0.9, thickAtmosphere: true, cloudSpin: 0.01 },
-  earth: { atmosphere: [0.32, 0.58, 1.0], atmosphereDensity: 0.85, bumpStrength: 0.9 },
+  earth: { atmosphere: [0.32, 0.58, 1.0], atmosphereDensity: 0.85, bumpStrength: 0.6 },
   moon: { atmosphere: [0, 0, 0], atmosphereDensity: 0, bumpStrength: 0.55 },
   mars: { atmosphere: [0.95, 0.6, 0.42], atmosphereDensity: 0.28, bumpStrength: 0.5 },
   jupiter: { atmosphere: [0.9, 0.78, 0.62], atmosphereDensity: 0.35, limbDarkening: true, bandFlow: 0.02 },
@@ -152,10 +152,11 @@ const fragmentShader = /* glsl */ `
       color *= 1.0 - cloudShadow * 0.55;
 
       vec3 H = normalize(L + V);
-      float gloss = mix(320.0, 14.0, roughness);
+      // Блик Солнца на воде: узкое пятно, а у края диска — длинная полоса за счёт Френеля.
+      float gloss = mix(900.0, 14.0, roughness);
       float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(N, V), 0.0), 5.0);
       float glint = pow(max(dot(N, H), 0.0), gloss) * (gloss + 8.0) / 80.0;
-      color += vec3(1.0, 0.94, 0.82) * glint * (0.05 + fresnel * 0.6) * ocean * (1.0 - cloud) * max(ndl, 0.0) * sunIntensity * 2.5;
+      color += vec3(1.0, 0.94, 0.82) * glint * (0.025 + fresnel * 0.6) * ocean * (1.0 - cloud) * max(ndl, 0.0) * sunIntensity;
 
       float night = smoothstep(0.06, -0.2, sunHeight);
       color += vec3(1.0, 0.66, 0.3) * pow(cityLights, 1.4) * night * (1.0 - cloud * 0.85) * 1.8;

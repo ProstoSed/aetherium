@@ -4,3 +4,4 @@ tools/shots
 .backup-original
 .claude
 *.log
+tools/sources

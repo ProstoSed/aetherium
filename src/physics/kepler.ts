@@ -102,6 +102,15 @@ export function poleDirection(id: string): Vec3 {
   return equatorialToScene(poleRa, poleDec);
 }
 
+/**
+ * Направление, от которого МАС отсчитывает угол нулевого меридиана W: восходящий узел экватора
+ * тела на небесном экваторе, RA = α₀ + 90°. Без этой опоры поворот поверхности на W указывал бы
+ * в произвольную сторону, и полдень UTC приходился бы не на Гринвич.
+ */
+export function meridianOriginDirection(id: string): Vec3 {
+  return equatorialToScene(ROTATION[id].poleRa + 90, 0);
+}
+
 /** Экваториальные координаты J2000 (RA и Dec в градусах) → единичный вектор в осях сцены. */
 export function equatorialToScene(raDegrees: number, decDegrees: number): Vec3 {
   const ra = raDegrees * DEG, dec = decDegrees * DEG, obliquity = OBLIQUITY_J2000 * DEG;
