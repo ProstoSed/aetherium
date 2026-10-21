@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Type check, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Orbit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # The build is a single self-contained HTML file: downloadable from the run page and opens from disk.
+      - name: Upload build
+        uses: actions/upload-artifact@v5
+        with:
+          name: aetherium
+          path: dist/index.html
+          if-no-files-found: error
+          retention-days: 14

@@ -1,8 +1,13 @@
 # Aetherium
 
+[![CI](https://github.com/ProstoSed/aetherium/actions/workflows/ci.yml/badge.svg)](https://github.com/ProstoSed/aetherium/actions/workflows/ci.yml)
+
 The Solar System on real orbits, in illustrative or true scale, with cosmic events — all seen
 through an old film camera whose lens and emulsion react to what you look at.
-React 19, TypeScript, Vite, Three.js. The interface is in Russian.
+React 19, TypeScript, Vite, Three.js.
+
+The interface speaks English, Russian, German, French and Simplified Chinese. It follows the
+browser language on first visit and remembers the choice made in the language menu.
 
 ## Run
 
@@ -41,6 +46,11 @@ acceleration.
   high speed you can watch them slowly turn. Checked against observed dates: oppositions of Mars
   (2025-01-16), Jupiter (2026-01-10), Saturn (2025-09-21) and Venus's inferior conjunction match
   within 0.2°. Outside 1800–2050 the elements are extrapolated and the interface says so.
+- **Earth** is drawn from NASA imagery: Blue Marble colour, GEBCO relief and Black Marble city
+  lights. The globe is oriented by IAU rotation elements, so day, night and city lights match the
+  real time of day: at the March 2026 equinox at 12:00 UTC the subsolar point falls in the Gulf of
+  Guinea, at 00:00 UTC in the Pacific (`tools/check-earth-time.cjs`). Oceans are found from the
+  imagery itself and cover 70.6% of the map against the real 71%.
 - **The Moon** follows Schlyter's elements with nodal regression (18.6 years) and apsidal precession.
 - **Rotation axes** use IAU pole positions and rotation rates (Archinal et al. 2018): Uranus lies
   on its side, Venus spins backwards.
@@ -59,9 +69,9 @@ acceleration.
 
 - **Illustrative scale** compresses distances (∝ r^0.5) and radii (∝ R^0.42) so the whole system
   fits on screen. Orbit shapes are preserved.
-- **Planet surfaces** are procedural and generated on the GPU into cube maps (no pole pinching).
-  Features are recognisable — lunar maria, Martian polar caps, the Great Red Spot, Saturn's
-  hexagon, Neptune's Great Dark Spot — but they are not maps.
+- **Surfaces of the other bodies** are procedural and generated on the GPU into cube maps (no pole
+  pinching), as are Earth's clouds. Features are recognisable — lunar maria, Martian polar caps,
+  the Great Red Spot, Saturn's hexagon, Neptune's Great Dark Spot — but they are not maps.
 - **Deep-sky objects** are drawn procedurally and enlarged about twice so they read on screen.
 - **Events** are artistic scenarios. The Sun is not massive enough to go supernova, and no alien
   fleets have been observed. The gravitational wave has the correct strain pattern, amplified
@@ -99,9 +109,11 @@ src/
   lens/        lens shader, bloom, artefact director, full-window film overlay
   events/      event director and 12 scenarios, one file each
   ui/          interface components
+  i18n/        interface languages: dictionaries, number, date and plural formatting
   audio/       synthesised ambience
   styles/      styling
-tools/         sky catalogue builder, performance and screenshot scripts
+  assets/      Earth maps prepared from NASA imagery, Milky Way brightness map
+tools/         sky and Earth map builders, performance, screenshot and check scripts
 tests/         physics check and end-to-end browser test
 ```
 
@@ -111,14 +123,19 @@ per frame and shaders compile in parallel, so the main thread stays free while t
 
 ## Checks
 
+Every push and pull request runs type checking, the orbit tests and the build on GitHub Actions;
+the built `index.html` is attached to each run.
+
 ```bash
 npm run typecheck
-npm test                      # orbits against observed dates
-npm run test:e2e              # end-to-end browser test (needs npm run dev)
+npm test                      # orbits and Earth's rotation against observed dates
+npm run test:e2e              # end-to-end browser test incl. all languages (needs npm run dev)
+node tools/check-earth-time.cjs   # Earth seen from the Sun at known UTC moments
 node tools/measure-fps.cjs http://127.0.0.1:5177/ 8 weak
 node tools/measure-startup.cjs http://127.0.0.1:5178/
-node tools/shoot.cjs          # screenshots of key states into tools/shots
+node tools/shoot.cjs http://127.0.0.1:5177/ tools/shots earth,events en   # screenshots
 npm run sky                   # rebuild the sky catalogue from d3-celestial
+node tools/build-earth.cjs    # rebuild Earth maps from NASA originals (links inside)
 ```
 
 ## Data and credits
@@ -132,4 +149,8 @@ npm run sky                   # rebuild the sky catalogue from d3-celestial
   XHIP, an extended Hipparcos compilation (Anderson & Francis 2012); IAU constellation lines and
   names; the Milky Way Outline Catalog by J. R. Vieira; Messier data by H. Frommert (SEDS) and the
   Saguaro Astronomy Club deep-sky database.
+- Earth: Blue Marble: Next Generation (July 2004), NASA Earth Observatory; relief — imagery by
+  Jesse Allen, NASA Earth Observatory, using data from the General Bathymetric Chart of the Oceans
+  (GEBCO) produced by the British Oceanographic Data Centre; Earth at Night (Black Marble 2016),
+  NASA Earth Observatory. Source links are listed in `tools/build-earth.cjs`.
 - 3D simplex noise: Ashima Arts and Stefan Gustavson (MIT).
