@@ -39,7 +39,7 @@ jobs:
 
       # The build is a single self-contained HTML file: downloadable from the run page and opens from disk.
       - name: Upload build
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: aetherium
           path: dist/index.html
