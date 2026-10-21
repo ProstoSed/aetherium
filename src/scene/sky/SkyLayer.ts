@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import milkyWayUrl from '../../assets/sky/milkyway.png';
 import { CONSTELLATION_LINES, CONSTELLATION_NAMES, DEEP_SKY, STAR_COUNT, STARS_BASE64, type DeepSkyKind } from '../../data/sky/skyCatalog.generated';
+import type { Language } from '../../i18n/languages';
 import { OBLIQUITY_J2000 } from '../../data/orbitalElements';
 import { equatorialToScene } from '../../physics/kepler';
 
@@ -293,43 +294,52 @@ function createConstellationLines(): THREE.LineSegments {
   return lines;
 }
 
-function createConstellationNames(): THREE.Group {
-  const group = new THREE.Group();
-  group.renderOrder = 4;
-  const build = () => {
-    for (const constellation of CONSTELLATION_NAMES) {
-      if (constellation.rank > NAMED_CONSTELLATION_MAX_RANK) continue;
-      const text = constellation.name.replace(/\s+/g, ' ').toUpperCase();
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d')!;
-      const fontSize = 34;
-      const font = `600 ${fontSize}px Manrope, "Segoe UI", sans-serif`;
-      context.font = font;
-      const letterSpacing = fontSize * 0.28;
-      const width = Math.ceil([...text].reduce((sum, ch) => sum + context.measureText(ch).width + letterSpacing, 0));
-      canvas.width = width + 16;
-      canvas.height = fontSize + 16;
-      context.font = font;
-      context.fillStyle = 'rgba(226, 196, 138, 1)';
-      context.textBaseline = 'middle';
-      let x = 8;
-      for (const ch of text) {
-        context.fillText(ch, x, canvas.height / 2);
-        x += context.measureText(ch).width + letterSpacing;
-      }
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.26, depthTest: false, depthWrite: false, sizeAttenuation: false }));
-      const height = 0.018;
-      sprite.scale.set(height * (canvas.width / canvas.height), height, 1);
-      sprite.position.copy(toVector(constellation.ra, constellation.dec).multiplyScalar(4.3));
-      sprite.renderOrder = 4;
-      group.add(sprite);
+/** Иероглифам нужен шрифт с китайскими знаками и меньшая разрядка: она рассчитана на заглавные латиницы. */
+const NAME_FONTS: Record<'latin' | 'chinese', { family: string; spacing: number }> = {
+  latin: { family: 'Manrope, "Segoe UI", sans-serif', spacing: 0.28 },
+  chinese: { family: '"Microsoft YaHei", "PingFang SC", "Noto Sans SC", "Noto Sans CJK SC", sans-serif', spacing: 0.12 },
+};
+
+function fillConstellationNames(group: THREE.Group, language: Language) {
+  const font = NAME_FONTS[language === 'zh' ? 'chinese' : 'latin'];
+  for (const constellation of CONSTELLATION_NAMES) {
+    if (constellation.rank > NAMED_CONSTELLATION_MAX_RANK) continue;
+    const text = constellation.names[language].replace(/\s+/g, ' ').toLocaleUpperCase(language);
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d')!;
+    const fontSize = 34;
+    const fontCss = `600 ${fontSize}px ${font.family}`;
+    context.font = fontCss;
+    const letterSpacing = fontSize * font.spacing;
+    const width = Math.ceil([...text].reduce((sum, ch) => sum + context.measureText(ch).width + letterSpacing, 0));
+    canvas.width = width + 16;
+    canvas.height = fontSize + 16;
+    context.font = fontCss;
+    context.fillStyle = 'rgba(226, 196, 138, 1)';
+    context.textBaseline = 'middle';
+    let x = 8;
+    for (const ch of text) {
+      context.fillText(ch, x, canvas.height / 2);
+      x += context.measureText(ch).width + letterSpacing;
     }
-  };
-  // Подписи рисуются шрифтом интерфейса — дождаться его загрузки, иначе останется системный.
-  void document.fonts.ready.then(build);
-  return group;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true, opacity: 0.26, depthTest: false, depthWrite: false, sizeAttenuation: false }));
+    const height = 0.018;
+    sprite.scale.set(height * (canvas.width / canvas.height), height, 1);
+    sprite.position.copy(toVector(constellation.ra, constellation.dec).multiplyScalar(4.3));
+    sprite.renderOrder = 4;
+    group.add(sprite);
+  }
+}
+
+function clearGroup(group: THREE.Group) {
+  for (const child of group.children) {
+    const sprite = child as THREE.Sprite;
+    sprite.material.map?.dispose();
+    sprite.material.dispose();
+  }
+  group.clear();
 }
 
 export class SkyLayer {
@@ -339,10 +349,30 @@ export class SkyLayer {
   private readonly milkyWay = createMilkyWay();
   private readonly deepSky = createDeepSky();
   private readonly lines = createConstellationLines();
-  private readonly names = createConstellationNames();
+  private readonly names = new THREE.Group();
+  private language: Language | null = null;
+  private fontsReady = false;
 
   constructor() {
+    this.names.renderOrder = 4;
     this.scene.add(this.milkyWay, this.deepSky, this.lines, this.stars, this.names);
+    // Подписи рисуются шрифтом интерфейса — до его загрузки остался бы системный.
+    void document.fonts.ready.then(() => {
+      this.fontsReady = true;
+      this.redrawNames();
+    });
+  }
+
+  setLanguage(language: Language) {
+    if (language === this.language) return;
+    this.language = language;
+    this.redrawNames();
+  }
+
+  private redrawNames() {
+    if (!this.fontsReady || !this.language) return;
+    clearGroup(this.names);
+    fillConstellationNames(this.names, this.language);
   }
 
   /** Поворот и перспектива — как у основной камеры; положение — всегда в центре небесной сферы. */

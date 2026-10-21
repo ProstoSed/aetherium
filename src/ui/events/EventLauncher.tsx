@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react';
 import { useRef } from 'react';
-import { formatCountdown } from '../format';
+import { useI18n } from '../../i18n';
+import { formatCountdown } from '../../i18n/format';
 import { useFrame, useObservatoryState, writeText } from '../observatoryContext';
 
 const RING_RADIUS = 21;
@@ -8,6 +9,7 @@ const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 /** Кнопка каталога событий. Кольцо вокруг — сколько осталось до следующего автособытия. */
 export function EventLauncher({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
   const autoEvents = useObservatoryState(s => s.autoEvents);
   const interval = useObservatoryState(s => s.autoInterval);
   const scaleMode = useObservatoryState(s => s.scaleMode);
@@ -33,8 +35,8 @@ export function EventLauncher({ open, onToggle }: { open: boolean; onToggle: () 
         <Sparkles size={18} strokeWidth={1.5} />
       </span>
       <span className="launcher-text">
-        <strong>События</strong>
-        <span>{counting ? <>следующее через <span ref={countdownRef} className="numeric" /></> : active ? 'идёт сейчас' : 'выберите сценарий'}</span>
+        <strong>{t.eventsUi.title}</strong>
+        <span>{counting ? <>{t.eventsUi.nextIn} <span ref={countdownRef} className="numeric" /></> : active ? t.eventsUi.running : t.eventsUi.choose}</span>
       </span>
     </button>
   );

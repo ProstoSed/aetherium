@@ -41,9 +41,23 @@ const lines = read('constellations.lines.json').features.map(feature => ({
   id: feature.id,
   segments: feature.geometry.coordinates.map(line => line.flatMap(([lon, dec]) => [round(raOf(lon)), round(dec)])),
 }));
+// Китайские названия в d3-celestial записаны традиционными иероглифами, интерфейс — упрощёнными (zh-CN).
+// Таблица покрывает все знаки, что встречаются в 88 названиях; два названия заменены официальными
+// названиями КНР (室女座 вместо бытового 處女座, 蝘蜓座 — верный знак вместо 蝘蜒).
+const SIMPLIFIED = Object.fromEntries([...'寶宝鷹鹰壇坛獵猎馬马鯨鲸魚鱼圓圆規规鴿鸽髮发烏乌鴉鸦鵝鹅劍剑龍龙爐炉雙双鶴鹤時时鐘钟長长蠍蝎獅狮貓猫顯显鏡镜蒼苍蠅蝇極极戶户飛飞鳳凤繪绘羅罗盤盘網网遠远鵑鹃處处儀仪'.matchAll(/(.)(.)/gu)].map(([, from, to]) => [from, to]));
+const CHINESE_OVERRIDES = { Vir: '室女座', Cha: '蝘蜓座' };
+const toSimplified = text => [...text].map(char => SIMPLIFIED[char] ?? char).join('');
+
 const names = read('constellations.json').features.map(feature => ({
   id: feature.id,
-  name: feature.properties.ru || feature.properties.name,
+  // Английский интерфейс берёт латинские названия МАС: так их пишут астрономы и атласы.
+  names: {
+    en: feature.properties.name,
+    ru: feature.properties.ru,
+    de: feature.properties.de,
+    fr: feature.properties.fr,
+    zh: CHINESE_OVERRIDES[feature.id] ?? toSimplified(feature.properties.zh),
+  },
   rank: Number(feature.properties.rank),
   ra: round(raOf(feature.geometry.coordinates[0])),
   dec: round(feature.geometry.coordinates[1]),
@@ -75,7 +89,7 @@ const addObject = (feature, fallbackName) => {
   });
 };
 read('messier.json').features.forEach(feature => addObject(feature));
-const FAMOUS = { 'NGC 3372': 'Туманность Киля', 'NGC 7000': 'Северная Америка', 'NGC 1499': 'Калифорния', 'IC 2944': 'Бегущий цыплёнок', 'PGC 17223': 'Большое Магелланово Облако', 'NGC 292': 'Малое Магелланово Облако' };
+const FAMOUS = { 'NGC 3372': 'Carina Nebula', 'NGC 7000': 'North America Nebula', 'NGC 1499': 'California Nebula', 'IC 2944': 'Running Chicken Nebula', 'PGC 17223': 'Large Magellanic Cloud', 'NGC 292': 'Small Magellanic Cloud' };
 read('dsos.6.json').features.filter(feature => FAMOUS[feature.id]).forEach(feature => addObject(feature, FAMOUS[feature.id]));
 
 // --- Млечный Путь: пять вложенных уровней яркости -------------------------------
@@ -204,7 +218,7 @@ export const STAR_COUNT = ${stars.length};
 /** Линии созвездий: для каждого — ломаные в виде плоских пар [RA°, Dec°, …]. */
 export const CONSTELLATION_LINES: { id: string; segments: number[][] }[] = ${JSON.stringify(lines)};
 
-export const CONSTELLATION_NAMES: { id: string; name: string; rank: number; ra: number; dec: number }[] = ${JSON.stringify(names)};
+export const CONSTELLATION_NAMES: { id: string; names: Record<'en' | 'ru' | 'de' | 'fr' | 'zh', string>; rank: number; ra: number; dec: number }[] = ${JSON.stringify(names)};
 
 export type DeepSkyKind = 'emission' | 'reflection' | 'planetary' | 'remnant' | 'galaxy';
 /** Размеры — в угловых минутах. */

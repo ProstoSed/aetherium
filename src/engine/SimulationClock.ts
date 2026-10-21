@@ -1,23 +1,24 @@
 import { julianDateFromDate } from '../physics/time';
 
-/** Скорость хода времени: сколько суток симуляции проходит за секунду. */
-export type SpeedPreset = { id: string; label: string; daysPerSecond: number };
+/** Скорость хода времени: сколько суток симуляции проходит за секунду. Подписи — в словарях i18n. */
+export type SpeedId = 'realtime' | 'hour' | 'day' | 'week' | 'month' | 'year' | 'decade' | 'century' | 'millennium';
+export type SpeedPreset = { id: SpeedId; daysPerSecond: number };
 
 const SECONDS_PER_DAY = 86_400;
 
 export const SPEED_PRESETS: SpeedPreset[] = [
-  { id: 'realtime', label: 'Реальное время', daysPerSecond: 1 / SECONDS_PER_DAY },
-  { id: 'hour', label: '1 час/с', daysPerSecond: 1 / 24 },
-  { id: 'day', label: '1 день/с', daysPerSecond: 1 },
-  { id: 'week', label: '1 неделя/с', daysPerSecond: 7 },
-  { id: 'month', label: '1 месяц/с', daysPerSecond: 30.44 },
-  { id: 'year', label: '1 год/с', daysPerSecond: 365.25 },
-  { id: 'decade', label: '10 лет/с', daysPerSecond: 3652.5 },
-  { id: 'century', label: '100 лет/с', daysPerSecond: 36_525 },
-  { id: 'millennium', label: '1000 лет/с', daysPerSecond: 365_250 },
+  { id: 'realtime', daysPerSecond: 1 / SECONDS_PER_DAY },
+  { id: 'hour', daysPerSecond: 1 / 24 },
+  { id: 'day', daysPerSecond: 1 },
+  { id: 'week', daysPerSecond: 7 },
+  { id: 'month', daysPerSecond: 30.44 },
+  { id: 'year', daysPerSecond: 365.25 },
+  { id: 'decade', daysPerSecond: 3652.5 },
+  { id: 'century', daysPerSecond: 36_525 },
+  { id: 'millennium', daysPerSecond: 365_250 },
 ];
 
-export const DEFAULT_SPEED_ID = 'week';
+export const DEFAULT_SPEED_ID: SpeedId = 'week';
 
 /**
  * Даты дальше этих пределов теряют смысл: линейные вековые поправки

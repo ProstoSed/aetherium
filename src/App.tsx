@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Ambience } from './audio/Ambience';
 import { Observatory } from './engine/Observatory';
+import { useI18n } from './i18n';
 import { BodyCard } from './ui/BodyCard';
 import { BodyRail } from './ui/BodyRail';
 import { EventBanner } from './ui/events/EventBanner';
@@ -21,6 +22,7 @@ export default function App() {
   const hudRef = useRef<HTMLDivElement>(null);
   const [observatory, setObservatory] = useState<Observatory | null>(null);
   const [failed, setFailed] = useState(false);
+  const { t } = useI18n();
 
   useEffect(() => {
     let instance: Observatory | null = null;
@@ -60,8 +62,8 @@ export default function App() {
         )}
         {failed && (
           <div className="webgl-error">
-            <strong>Нужен WebGL 2</strong>
-            <span>Включите аппаратное ускорение в настройках браузера и перезагрузите страницу.</span>
+            <strong>{t.webglError.title}</strong>
+            <span>{t.webglError.hint}</span>
           </div>
         )}
       </div>

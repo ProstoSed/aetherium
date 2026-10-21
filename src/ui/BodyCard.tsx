@@ -1,13 +1,15 @@
 import { Crosshair, X } from 'lucide-react';
 import { useRef } from 'react';
 import { BODY_BY_ID } from '../data/bodies';
+import { useI18n } from '../i18n';
+import { formatAu, formatDistance, formatFact, formatLightTime } from '../i18n/format';
 import { BodyOrb } from './BodyOrb';
-import { formatAu, formatKm, formatLightTime } from './format';
 import { useFrame, useObservatory, useObservatoryState, writeText } from './observatoryContext';
 
 /** Карточка выбранного тела. Расстояния живые: считаются по орбитам на текущую дату симуляции. */
 export function BodyCard() {
   const observatory = useObservatory();
+  const { t } = useI18n();
   const selected = useObservatoryState(s => s.selected);
   const focused = useObservatoryState(s => s.focused);
   const fromSun = useRef<HTMLElement>(null);
@@ -15,51 +17,52 @@ export function BodyCard() {
   const lightTime = useRef<HTMLElement>(null);
 
   useFrame(frame => {
-    if (frame.selectedFromSunAu !== null) writeText(fromSun.current, formatAu(frame.selectedFromSunAu));
+    if (frame.selectedFromSunAu !== null) writeText(fromSun.current, formatAu(t, frame.selectedFromSunAu));
     if (frame.selectedFromEarthKm !== null) {
-      writeText(fromEarth.current, formatKm(frame.selectedFromEarthKm));
-      writeText(lightTime.current, formatLightTime(frame.selectedFromEarthKm));
+      writeText(fromEarth.current, formatDistance(t, frame.selectedFromEarthKm));
+      writeText(lightTime.current, formatLightTime(t, frame.selectedFromEarthKm));
     }
   });
 
   if (!selected) return null;
   const body = BODY_BY_ID[selected];
+  const text = t.bodies[selected];
   const hasSunDistance = selected !== 'sun';
   const hasEarthDistance = selected !== 'sun' && selected !== 'earth';
 
   return (
-    <aside className="body-card" key={selected} aria-label={`Сведения: ${body.name}`}>
-      <button type="button" className="card-close" aria-label="Закрыть карточку" onClick={() => observatory.select(null)}>
+    <aside className="body-card" key={selected} aria-label={t.card.label(text.name)}>
+      <button type="button" className="card-close" aria-label={t.card.close} onClick={() => observatory.select(null)}>
         <X size={16} strokeWidth={1.6} />
       </button>
 
       <div className="card-hero">
         <BodyOrb id={selected} size={selected === 'saturn' || selected === 'uranus' ? 104 : 84} />
         <div>
-          <p className="card-kind">{body.kind}</p>
-          <h2 className="card-name">{body.name}</h2>
+          <p className="card-kind">{text.kind}</p>
+          <h2 className="card-name">{text.name}</h2>
         </div>
       </div>
 
-      <p className="card-description">{body.description}</p>
+      <p className="card-description">{text.description}</p>
 
       {(hasSunDistance || hasEarthDistance) && (
         <dl className="card-live">
           {hasSunDistance && (
             <div>
-              <dt>До Солнца сейчас</dt>
+              <dt>{t.card.fromSun}</dt>
               <dd ref={fromSun} />
             </div>
           )}
           {hasEarthDistance && (
             <div>
-              <dt>До Земли сейчас</dt>
+              <dt>{t.card.fromEarth}</dt>
               <dd ref={fromEarth} />
             </div>
           )}
           {hasEarthDistance && (
             <div>
-              <dt>Свет от Земли идёт</dt>
+              <dt>{t.card.lightTime}</dt>
               <dd ref={lightTime} />
             </div>
           )}
@@ -67,18 +70,21 @@ export function BodyCard() {
       )}
 
       <dl className="card-facts">
-        {body.facts.map(fact => (
-          <div key={fact.label}>
-            <dt>{fact.label}</dt>
-            <dd>{fact.value}</dd>
-          </div>
-        ))}
+        {body.facts.map(fact => {
+          const { label, value } = formatFact(t, fact);
+          return (
+            <div key={fact.kind}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          );
+        })}
       </dl>
 
       {focused !== selected && (
         <button type="button" className="primary-button" onClick={() => observatory.focus(selected)}>
           <Crosshair size={16} strokeWidth={1.8} />
-          Лететь к телу
+          {t.card.flyTo}
         </button>
       )}
     </aside>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../i18n';
 
 const COUNTDOWN = [3, 2, 1];
 const STEP_MS = 620;
@@ -23,6 +24,7 @@ function introAlreadySeen(): boolean {
  * что всё загрузилось, когда за ней ещё чёрный экран. Щелчок или клавиша пропускают отсчёт.
  */
 export function Intro({ progress, ready }: { progress: number; ready: boolean }) {
+  const { t } = useI18n();
   const [seenBefore] = useState(introAlreadySeen);
   const [phase, setPhase] = useState<Phase>(seenBefore ? 'title' : 'countdown');
   const [step, setStep] = useState(0);
@@ -73,7 +75,7 @@ export function Intro({ progress, ready }: { progress: number; ready: boolean })
       onPointerDown={() => { if (phase === 'countdown') { setPhase('title'); setTitleShownAt(performance.now() - TITLE_MIN_MS); } }}
       role="status"
       aria-live="polite"
-      aria-label={ready ? 'Сцена готова' : 'Загрузка сцены'}
+      aria-label={ready ? t.intro.readyLabel : t.intro.loadingLabel}
     >
       {phase === 'countdown' ? (
         <div className="leader" key={step} aria-hidden="true">
@@ -86,11 +88,11 @@ export function Intro({ progress, ready }: { progress: number; ready: boolean })
         <div className="intro-title">
           <span className="intro-rule" />
           <h1>Aetherium</h1>
-          <p>механика неба</p>
+          <p>{t.brand.tagline}</p>
           <div className="intro-progress" aria-hidden="true">
             <span style={{ transform: `scaleX(${ready ? 1 : Math.max(0.04, progress)})` }} />
           </div>
-          <span className="intro-status">{ready ? 'Готово' : 'Проявляем плёнку…'}</span>
+          <span className="intro-status">{ready ? t.intro.ready : t.intro.developing}</span>
         </div>
       )}
       <span className="intro-grain" aria-hidden="true" />

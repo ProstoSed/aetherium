@@ -1,129 +1,135 @@
-/** Справочные сведения о небесных телах. Орбиты и вращение — в orbitalElements.ts. */
+/**
+ * Справочные сведения о небесных телах. Орбиты и вращение — в orbitalElements.ts,
+ * названия и описания на языках интерфейса — в src/i18n/messages.
+ */
 export type BodyId = 'sun' | 'mercury' | 'venus' | 'earth' | 'moon' | 'mars' | 'jupiter' | 'saturn' | 'uranus' | 'neptune';
+
+/** Факт хранится числом, а не строкой: единицы, разделители и склонения зависят от языка. */
+export type BodyFact =
+  | { kind: 'diameter'; km: number }
+  | { kind: 'distanceToEarth'; km: [number, number] }
+  | { kind: 'mass'; earths: number }
+  | { kind: 'temperature' | 'meanTemperature' | 'surfaceTemperature'; celsius: number | [number, number] }
+  | { kind: 'equatorRotation' | 'orbitalPeriod'; days: number }
+  | { kind: 'solarDay'; earthDays: number }
+  | { kind: 'day'; hours: number; minutes: number }
+  | { kind: 'axialTilt'; degrees: number }
+  | { kind: 'moons'; count: number };
+
+export type FactKind = BodyFact['kind'];
 
 export type BodyInfo = {
   id: BodyId;
-  name: string;
-  kind: string;
   /** Цвет точки в списке и маркера в истинном масштабе. */
   color: string;
   radiusKm: number;
   /** Вокруг чего обращается; у Солнца — ничего. */
   parent: BodyId | null;
-  description: string;
-  facts: { label: string; value: string }[];
+  facts: BodyFact[];
 };
 
 export const BODIES: BodyInfo[] = [
   {
-    id: 'sun', name: 'Солнце', kind: 'Звезда, жёлтый карлик G2V', color: '#f3b54a', radiusKm: 695_700, parent: null,
-    description: 'Держит 99,86% массы всей системы. Свет от поверхности идёт до Земли 8 минут 20 секунд.',
+    id: 'sun', color: '#f3b54a', radiusKm: 695_700, parent: null,
     facts: [
-      { label: 'Диаметр', value: '1 392 700 км' },
-      { label: 'Масса', value: '333 000 Земель' },
-      { label: 'Поверхность', value: '5 500 °C' },
-      { label: 'Оборот у экватора', value: '25,4 суток' },
+      { kind: 'diameter', km: 1_392_700 },
+      { kind: 'mass', earths: 333_000 },
+      { kind: 'surfaceTemperature', celsius: 5500 },
+      { kind: 'equatorRotation', days: 25.4 },
     ],
   },
   {
-    id: 'mercury', name: 'Меркурий', kind: 'Планета земной группы', color: '#a79f90', radiusKm: 2439.7, parent: 'sun',
-    description: 'Самая вытянутая орбита среди планет: в перигелии Солнце в полтора раза крупнее, чем в афелии.',
+    id: 'mercury', color: '#a79f90', radiusKm: 2439.7, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '4 879 км' },
-      { label: 'Масса', value: '0,055 Земли' },
-      { label: 'Температура', value: '−173…+427 °C' },
-      { label: 'Солнечные сутки', value: '176 земных суток' },
-      { label: 'Спутники', value: 'нет' },
+      { kind: 'diameter', km: 4879 },
+      { kind: 'mass', earths: 0.055 },
+      { kind: 'temperature', celsius: [-173, 427] },
+      { kind: 'solarDay', earthDays: 176 },
+      { kind: 'moons', count: 0 },
     ],
   },
   {
-    id: 'venus', name: 'Венера', kind: 'Планета земной группы', color: '#d9b876', radiusKm: 6051.8, parent: 'sun',
-    description: 'Вращается в обратную сторону и так медленно, что сутки длиннее года. Жарче Меркурия из-за парникового эффекта.',
+    id: 'venus', color: '#d9b876', radiusKm: 6051.8, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '12 104 км' },
-      { label: 'Масса', value: '0,815 Земли' },
-      { label: 'Температура', value: '+464 °C' },
-      { label: 'Наклон оси', value: '177,4°' },
-      { label: 'Спутники', value: 'нет' },
+      { kind: 'diameter', km: 12_104 },
+      { kind: 'mass', earths: 0.815 },
+      { kind: 'temperature', celsius: 464 },
+      { kind: 'axialTilt', degrees: 177.4 },
+      { kind: 'moons', count: 0 },
     ],
   },
   {
-    id: 'earth', name: 'Земля', kind: 'Планета земной группы', color: '#4f8fc9', radiusKm: 6371, parent: 'sun',
-    description: 'Единственный известный мир с жидкими океанами на поверхности и жизнью.',
+    id: 'earth', color: '#4f8fc9', radiusKm: 6371, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '12 742 км' },
-      { label: 'Средняя температура', value: '+15 °C' },
-      { label: 'Наклон оси', value: '23,44°' },
-      { label: 'Сутки', value: '23 ч 56 мин' },
-      { label: 'Спутники', value: '1' },
+      { kind: 'diameter', km: 12_742 },
+      { kind: 'meanTemperature', celsius: 15 },
+      { kind: 'axialTilt', degrees: 23.44 },
+      { kind: 'day', hours: 23, minutes: 56 },
+      { kind: 'moons', count: 1 },
     ],
   },
   {
-    id: 'moon', name: 'Луна', kind: 'Спутник Земли', color: '#bdb9b0', radiusKm: 1737.4, parent: 'earth',
-    description: 'Всегда повёрнута к Земле одной стороной. Плоскость её орбиты разворачивается за 18,6 года — отсюда ритм затмений.',
+    id: 'moon', color: '#bdb9b0', radiusKm: 1737.4, parent: 'earth',
     facts: [
-      { label: 'Диаметр', value: '3 474 км' },
-      { label: 'До Земли', value: '363 000…406 000 км' },
-      { label: 'Оборот', value: '27,3 суток' },
-      { label: 'Масса', value: '0,012 Земли' },
+      { kind: 'diameter', km: 3474 },
+      { kind: 'distanceToEarth', km: [363_000, 406_000] },
+      { kind: 'orbitalPeriod', days: 27.3 },
+      { kind: 'mass', earths: 0.012 },
     ],
   },
   {
-    id: 'mars', name: 'Марс', kind: 'Планета земной группы', color: '#c1653d', radiusKm: 3389.5, parent: 'sun',
-    description: 'Здесь гора Олимп высотой 22 км и каньон длиной с Австралию. Красный цвет даёт оксид железа в пыли.',
+    id: 'mars', color: '#c1653d', radiusKm: 3389.5, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '6 779 км' },
-      { label: 'Масса', value: '0,107 Земли' },
-      { label: 'Температура', value: '−65 °C' },
-      { label: 'Сутки', value: '24 ч 37 мин' },
-      { label: 'Спутники', value: '2' },
+      { kind: 'diameter', km: 6779 },
+      { kind: 'mass', earths: 0.107 },
+      { kind: 'temperature', celsius: -65 },
+      { kind: 'day', hours: 24, minutes: 37 },
+      { kind: 'moons', count: 2 },
     ],
   },
   {
-    id: 'jupiter', name: 'Юпитер', kind: 'Газовый гигант', color: '#c99a6b', radiusKm: 69_911, parent: 'sun',
-    description: 'Тяжелее всех остальных планет вместе взятых. Большое Красное Пятно — буря шире Земли.',
+    id: 'jupiter', color: '#c99a6b', radiusKm: 69_911, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '139 820 км' },
-      { label: 'Масса', value: '317,8 Земли' },
-      { label: 'Температура', value: '−110 °C' },
-      { label: 'Сутки', value: '9 ч 56 мин' },
-      { label: 'Спутники', value: '97' },
+      { kind: 'diameter', km: 139_820 },
+      { kind: 'mass', earths: 317.8 },
+      { kind: 'temperature', celsius: -110 },
+      { kind: 'day', hours: 9, minutes: 56 },
+      { kind: 'moons', count: 97 },
     ],
   },
   {
-    id: 'saturn', name: 'Сатурн', kind: 'Газовый гигант', color: '#dcc08a', radiusKm: 58_232, parent: 'sun',
-    description: 'Кольца шириной 280 000 км, а толщиной местами около десяти метров. Средняя плотность ниже, чем у воды.',
+    id: 'saturn', color: '#dcc08a', radiusKm: 58_232, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '116 460 км' },
-      { label: 'Масса', value: '95,2 Земли' },
-      { label: 'Температура', value: '−140 °C' },
-      { label: 'Сутки', value: '10 ч 34 мин' },
-      { label: 'Спутники', value: '274' },
+      { kind: 'diameter', km: 116_460 },
+      { kind: 'mass', earths: 95.2 },
+      { kind: 'temperature', celsius: -140 },
+      { kind: 'day', hours: 10, minutes: 34 },
+      { kind: 'moons', count: 274 },
     ],
   },
   {
-    id: 'uranus', name: 'Уран', kind: 'Ледяной гигант', color: '#8fc3c9', radiusKm: 25_362, parent: 'sun',
-    description: 'Лежит на боку: ось наклонена на 98°. Каждый полюс по 42 года освещён без перерыва, потом столько же во тьме.',
+    id: 'uranus', color: '#8fc3c9', radiusKm: 25_362, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '50 724 км' },
-      { label: 'Масса', value: '14,5 Земли' },
-      { label: 'Температура', value: '−195 °C' },
-      { label: 'Наклон оси', value: '97,8°' },
-      { label: 'Спутники', value: '29' },
+      { kind: 'diameter', km: 50_724 },
+      { kind: 'mass', earths: 14.5 },
+      { kind: 'temperature', celsius: -195 },
+      { kind: 'axialTilt', degrees: 97.8 },
+      { kind: 'moons', count: 29 },
     ],
   },
   {
-    id: 'neptune', name: 'Нептун', kind: 'Ледяной гигант', color: '#4f78c4', radiusKm: 24_622, parent: 'sun',
-    description: 'Найден в 1846 году на кончике пера — по отклонениям в движении Урана. Ветры до 2 000 км/ч.',
+    id: 'neptune', color: '#4f78c4', radiusKm: 24_622, parent: 'sun',
     facts: [
-      { label: 'Диаметр', value: '49 244 км' },
-      { label: 'Масса', value: '17,1 Земли' },
-      { label: 'Температура', value: '−200 °C' },
-      { label: 'Сутки', value: '16 ч 6 мин' },
-      { label: 'Спутники', value: '16' },
+      { kind: 'diameter', km: 49_244 },
+      { kind: 'mass', earths: 17.1 },
+      { kind: 'temperature', celsius: -200 },
+      { kind: 'day', hours: 16, minutes: 6 },
+      { kind: 'moons', count: 16 },
     ],
   },
 ];
 
 export const BODY_BY_ID = Object.fromEntries(BODIES.map(b => [b.id, b])) as Record<BodyId, BodyInfo>;
 export const PLANET_IDS: BodyId[] = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'];
+/** Средний радиус орбиты Луны — подпись в списке тел. */
+export const MOON_MEAN_DISTANCE_KM = 384_400;

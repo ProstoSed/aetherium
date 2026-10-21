@@ -177,6 +177,8 @@
   flex: none;
   margin-left: auto;
   letter-spacing: 0.04em;
+  /* Обозначение секунд строчное во всех языках: «26 s», а не «26 S». */
+  text-transform: none;
   color: var(--text-soft);
 }
 

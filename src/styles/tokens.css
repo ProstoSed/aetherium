@@ -37,6 +37,13 @@
   --edge: clamp(14px, 2.2vw, 28px);
 }
 
+/* У шрифтов оформления нет китайских знаков: без явного запасного шрифта браузер берёт
+   первый попавшийся, и иероглифы в одной строке выходят разными гарнитурами. */
+:root:lang(zh) {
+  --font-display: 'Cormorant Garamond', 'Songti SC', 'SimSun', 'Noto Serif SC', serif;
+  --font-ui: 'Manrope', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+}
+
 *,
 *::before,
 *::after {
@@ -94,4 +101,11 @@ input:focus-visible {
     animation-iteration-count: 1 !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* Подписи-капители рассчитаны на латиницу в верхнем регистре: 10–11 px с разрядкой. Иероглифы
+   такого размера сливаются, а разрядка их только разрывает — для китайского крупнее и плотнее. */
+:root:lang(zh) :is(.card-kind, .card-facts dt, .deck-speed-label, .brand-tagline, .banner-phase, .panel-title, .event-card-top, .scene-label, .intro-status) {
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
 }

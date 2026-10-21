@@ -6,7 +6,7 @@ export const ObservatoryContext = createContext<Observatory | null>(null);
 
 export function useObservatory(): Observatory {
   const observatory = useContext(ObservatoryContext);
-  if (!observatory) throw new Error('useObservatory вызван вне ObservatoryContext');
+  if (!observatory) throw new Error('useObservatory must be called inside ObservatoryContext');
   return observatory;
 }
 

@@ -239,6 +239,65 @@
   transform: translateX(100%);
 }
 
+/* Короткая подпись — для узкого экрана: в разных языках длинная форма строится по-разному
+   («True scale», «Échelle réelle»), поэтому это две строки словаря, а не обрезка одной. */
+.scale-toggle-short { display: none; }
+
+.language-menu {
+  position: relative;
+}
+
+.language-mark {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+
+.language-mark:lang(zh) {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.language-list {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -4px;
+  z-index: 20;
+  display: grid;
+  min-width: 176px;
+  padding: 6px;
+  border-radius: var(--radius-panel);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  animation: popover-in 0.22s var(--ease-out);
+  transform-origin: top right;
+}
+
+.language-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-control);
+  color: var(--text-soft);
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.language-list button:hover {
+  color: var(--text);
+  background: var(--panel-raised);
+}
+
+.language-list button.is-active {
+  color: var(--brass-bright);
+}
+
 .tool-group {
   display: flex;
   align-items: center;
@@ -896,6 +955,7 @@
   .top-tools { width: 100%; justify-content: space-between; }
   .scale-toggle button { padding: 0 12px; font-size: 12.5px; }
   .scale-toggle-long { display: none; }
+  .scale-toggle-short { display: inline; }
   .tool-button { width: 36px; height: 36px; }
   /* На телефоне полноэкранный режим недоступен или неудобен — место нужнее. */
   .tool-fullscreen { display: none; }

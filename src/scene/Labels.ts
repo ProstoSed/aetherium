@@ -4,13 +4,23 @@ import type { BodyView } from './BodyViews';
 
 const LABEL_HEIGHT_PX = 24;
 const LABEL_CHAR_WIDTH_PX = 7.6;
+/** Иероглиф шире латинской буквы почти вдвое. */
+const LABEL_WIDE_CHAR_WIDTH_PX = 13.5;
+const FIRST_WIDE_CODE_POINT = 0x2e80;
 const LABEL_PADDING_PX = 22;
 const GAP_ABOVE_DISK_PX = 8;
 const VIEWPORT_MARGIN_PX = 40;
 
 type Placed = { left: number; right: number; top: number; bottom: number };
 type Projected = { x: number; y: number; diskPx: number; distance: number; inFront: boolean };
-type LabelState = { element: HTMLButtonElement; x: number; y: number; shown: boolean; chosen: boolean };
+type LabelState = { element: HTMLButtonElement; halfWidth: number; x: number; y: number; shown: boolean; chosen: boolean };
+
+/** Ширина подписи по числу знаков: измерять узлы каждый кадр — это пересчёт раскладки. */
+function estimateHalfWidth(text: string): number {
+  let width = LABEL_PADDING_PX;
+  for (const char of text) width += char.codePointAt(0)! >= FIRST_WIDE_CODE_POINT ? LABEL_WIDE_CHAR_WIDTH_PX : LABEL_CHAR_WIDTH_PX;
+  return width / 2;
+}
 
 /**
  * Подписи тел — обычные кнопки поверх холста. Позиция пишется прямо в style.transform
@@ -29,13 +39,20 @@ export class Labels {
       const element = document.createElement('button');
       element.type = 'button';
       element.className = 'scene-label';
-      element.textContent = body.name;
       element.style.setProperty('--body-color', body.color);
       element.addEventListener('click', () => onSelect(body.id));
       container.appendChild(element);
-      this.states.set(body.id, { element, x: -1, y: -1, shown: false, chosen: false });
+      this.states.set(body.id, { element, halfWidth: 0, x: -1, y: -1, shown: false, chosen: false });
     }
     this.priority = [...BODIES].sort((a, b) => b.radiusKm - a.radiusKm).map(b => b.id);
+  }
+
+  setNames(nameOf: (id: BodyId) => string) {
+    for (const [id, state] of this.states) {
+      const name = nameOf(id);
+      state.element.textContent = name;
+      state.halfWidth = estimateHalfWidth(name);
+    }
   }
 
   update(views: Map<BodyId, BodyView>, camera: THREE.PerspectiveCamera, width: number, height: number, selected: BodyId | null, enabled: boolean) {
@@ -68,7 +85,7 @@ export class Labels {
         const inside = x > -VIEWPORT_MARGIN_PX && x < width + VIEWPORT_MARGIN_PX && y > -VIEWPORT_MARGIN_PX && y < height + VIEWPORT_MARGIN_PX;
         shown = inside;
         if (shown) {
-          const halfWidth = (view.info.name.length * LABEL_CHAR_WIDTH_PX + LABEL_PADDING_PX) / 2;
+          const halfWidth = state.halfWidth;
           const rect = { left: x - halfWidth, right: x + halfWidth, top: y - LABEL_HEIGHT_PX, bottom: y };
           const overlaps = placed.some(p => rect.left < p.right && rect.right > p.left && rect.top < p.bottom && rect.bottom > p.top);
           shown = !overlaps || id === selected;

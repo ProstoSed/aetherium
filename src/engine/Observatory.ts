@@ -3,13 +3,14 @@ import { BODIES, PLANET_IDS, type BodyId } from '../data/bodies';
 import type { EventId } from '../data/events';
 import { EventDirector } from '../events/EventDirector';
 import type { ScenarioContext } from '../events/types';
+import { i18n } from '../i18n';
+import { formatSimulationDate } from '../i18n/format';
 import { FilmOverlay } from '../lens/FilmOverlay';
 import { FilmPeaks, emptyPeakState } from '../lens/filmPeaks';
 import { LensDirector, type FilmIntensity } from '../lens/LensDirector';
 import { LensPass } from '../lens/LensPass';
 import { heliocentricPosition, length, moonGeocentricKm, type Vec3 } from '../physics/kepler';
 import { KM_PER_AU, auFromSceneDistance, heliocentricToScene, moonOffsetToScene, overviewDistance, type ScaleMode } from '../physics/scale';
-import { formatSimulationDate } from '../physics/time';
 import { createAsteroidBelt } from '../scene/AsteroidBelt';
 import { BodyViews } from '../scene/BodyViews';
 import { Labels } from '../scene/Labels';
@@ -20,16 +21,17 @@ import { SkyLayer } from '../scene/sky/SkyLayer';
 import { createGlowTexture } from '../scene/textures';
 import { AdaptiveQuality, type QualityMode } from './AdaptiveQuality';
 import { CameraRig, VIEW_DISTANCE_IN_RADII } from './CameraRig';
-import { SPEED_PRESETS, SimulationClock } from './SimulationClock';
+import { SPEED_PRESETS, SimulationClock, type SpeedId } from './SimulationClock';
 import { createStore } from './store';
 
-export type HistoryEntry = { key: number; title: string; date: string; note: string };
+/** Запись хроники хранит факты, а не текст: при смене языка хроника перечитывается на новом. */
+export type HistoryEntry = { key: number; eventId: EventId; outcome: 'started' | 'completed' | 'interrupted'; julianDate: number };
 
 export type ObservatoryState = {
   selected: BodyId | null;
   focused: BodyId | null;
   scaleMode: ScaleMode;
-  speedId: string;
+  speedId: SpeedId;
   reversed: boolean;
   paused: boolean;
   activeEvent: EventId | null;
@@ -124,6 +126,7 @@ export class Observatory {
   private readonly frame: FrameInfo;
   private sunBrightness = 1;
   private historyKey = 0;
+  private readonly stopListeningLanguage: () => void;
   private animationFrame = 0;
   private lastTimestamp = 0;
   private width = 1;
@@ -143,6 +146,8 @@ export class Observatory {
     this.rig = new CameraRig(this.renderer.domElement);
     this.bodies = new BodyViews(this.clock.julianDate, this.baker);
     this.labels = new Labels(labelsLayer, id => this.select(id, true));
+    this.stopListeningLanguage = i18n.subscribe(() => this.applyLanguage());
+    this.applyLanguage();
     this.overlay = new FilmOverlay(hud);
     document.body.appendChild(this.overlay.canvas);
 
@@ -153,7 +158,7 @@ export class Observatory {
     this.events = new EventDirector(this.createScenarioContext(), {
       onStart: (info, scenario) => {
         this.store.set({ activeEvent: info.id });
-        this.addHistory(info.name, info.description);
+        this.addHistory(info.id, 'started');
         const { focus, distance } = scenario.preferredView;
         this.store.set({ focused: focus, selected: focus ?? this.store.get().selected });
         this.flyToTarget(focus, distance);
@@ -161,7 +166,7 @@ export class Observatory {
       onEnd: (info, interrupted) => {
         this.store.set({ activeEvent: null });
         this.events.resetCountdown(this.store.get().autoInterval);
-        this.addHistory(interrupted ? `${info.name} — прервано` : `${info.name} — завершено`, 'Орбиты вернулись к расчётным.');
+        this.addHistory(info.id, interrupted ? 'interrupted' : 'completed');
       },
     }, this.store.get().autoInterval);
 
@@ -224,7 +229,7 @@ export class Observatory {
     this.schedule(now + SCALE_CHANGE_COVER_DELAY, () => this.applyScaleModeKeepingView(mode));
   }
 
-  setSpeed(speedId: string) {
+  setSpeed(speedId: SpeedId) {
     const preset = SPEED_PRESETS.find(p => p.id === speedId);
     if (!preset) return;
     this.clock.daysPerSecond = preset.daysPerSecond;
@@ -386,7 +391,7 @@ export class Observatory {
   private publishFrame(state: ObservatoryState, realSeconds: number) {
     const frame = this.frame;
     frame.julianDate = this.clock.julianDate;
-    frame.dateText = formatSimulationDate(this.clock.julianDate);
+    frame.dateText = formatSimulationDate(i18n.messages, this.clock.julianDate);
     frame.eventProgress = this.events.progress;
     frame.eventRemaining = this.events.remainingSeconds;
     frame.autoCountdown = this.events.countdown;
@@ -514,9 +519,16 @@ export class Observatory {
     }
   }
 
-  private addHistory(title: string, note: string) {
-    const entry = { key: ++this.historyKey, title, date: formatSimulationDate(this.clock.julianDate), note };
+  private addHistory(eventId: EventId, outcome: HistoryEntry['outcome']) {
+    const entry: HistoryEntry = { key: ++this.historyKey, eventId, outcome, julianDate: this.clock.julianDate };
     this.store.set(state => ({ history: [entry, ...state.history].slice(0, 60) }));
+  }
+
+  /** Подписи тел и созвездий в сцене рисует движок, а не React, — их язык меняется здесь. */
+  private applyLanguage() {
+    const messages = i18n.messages;
+    this.labels.setNames(id => messages.bodies[id].name);
+    this.sky.setLanguage(i18n.language);
   }
 
   private resize() {
@@ -557,6 +569,7 @@ export class Observatory {
   dispose() {
     cancelAnimationFrame(this.animationFrame);
     this.resizeObserver.disconnect();
+    this.stopListeningLanguage();
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointerup', this.onPointerUp);
