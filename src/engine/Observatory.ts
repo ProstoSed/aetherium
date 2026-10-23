@@ -602,13 +602,16 @@ export class Observatory {
     this.pending.push({ at, action });
   }
 
+  /**
+   * Созревшие действия выполняются в порядке их времени. На медленной машине кадр длиннее промежутков
+   * между ними, и в один кадр созревают сразу несколько: запуск события после смены масштаба обязан
+   * увидеть масштаб уже сменённым.
+   */
   private runPending(now: number) {
-    for (let i = this.pending.length - 1; i >= 0; i--) {
-      if (now >= this.pending[i].at) {
-        const [{ action }] = this.pending.splice(i, 1);
-        action();
-      }
-    }
+    const due = this.pending.filter(entry => now >= entry.at).sort((a, b) => a.at - b.at);
+    if (due.length === 0) return;
+    this.pending.splice(0, this.pending.length, ...this.pending.filter(entry => now < entry.at));
+    for (const { action } of due) action();
   }
 
   private addHistory(eventId: EventId, outcome: HistoryEntry['outcome']) {
