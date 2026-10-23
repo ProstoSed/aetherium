@@ -13,6 +13,10 @@ const NEAR_TO_SURFACE_SHARE = 0.05;
 const FAR_PLANE = 5e6;
 const FLIGHT_MIN_SECONDS = 1.1;
 const FLIGHT_MAX_SECONDS = 3.2;
+/** Доля инерции вращения, что остаётся через 1/60 с; пересчитывается на длину кадра, чтобы инерция не зависела от частоты кадров. */
+const DAMPING_KEPT_PER_60HZ_FRAME = 0.92;
+/** Скорость, с которой кадр переезжает в свободную от панелей полосу, 1/с. */
+const FRAMING_RATE = 5;
 /** Во сколько радиусов тела камера останавливается после перелёта. */
 export const VIEW_DISTANCE_IN_RADII = 5.5;
 
@@ -38,12 +42,16 @@ export class CameraRig {
   private flight: Flight | null = null;
   private follow: (() => THREE.Vector3) | null = null;
   private readonly scratch = new THREE.Vector3();
+  private readonly turn = new THREE.Quaternion();
+  private readonly fullTurn = new THREE.Quaternion();
+  /** Сдвиг окна проекции вниз, доля высоты кадра: на столько центр внимания поднят над серединой экрана. */
+  private framingShift = 0;
+  private framingTarget = 0;
 
   constructor(domElement: HTMLElement) {
     this.camera.position.set(0, 40, 80);
     this.controls = new OrbitControls(this.camera, domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.08;
     this.controls.rotateSpeed = 0.6;
     this.controls.zoomSpeed = 1.1;
     this.controls.screenSpacePanning = true;
@@ -58,6 +66,15 @@ export class CameraRig {
     // На узком экране держим горизонтальный угол, иначе система не влезает по ширине.
     this.camera.fov = aspect < 1 ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(FIELD_OF_VIEW) / 2) / aspect)) : FIELD_OF_VIEW;
     this.camera.updateProjectionMatrix();
+  }
+
+  /**
+   * Где по высоте кадра должен стоять центр внимания (доля от верха). Камера при этом не
+   * поворачивается: сдвигается окно проекции, как у объектива со сдвигом, — и сцена, и подписи,
+   * и выбор щелчком видят одну и ту же проекцию.
+   */
+  setFramingCenter(share: number) {
+    this.framingTarget = 0.5 - share;
   }
 
   /** Сопровождает ли камера тело. Перенос правой кнопкой сопровождение снимает. */
@@ -114,10 +131,14 @@ export class CameraRig {
       const t = Math.min(1, f.elapsed / f.duration);
       const eased = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
       this.origin.lerpVectors(f.from, f.getTarget(), eased);
-      // Расстояние меняется в логарифмической шкале: от Нептуна к Земле без рывка в конце.
+      // Направление поворачивается по дуге большого круга с постоянной угловой скоростью:
+      // смесь векторов с нормировкой при почти противоположных направлениях проходит рядом
+      // с нулём и разворачивает камеру рывком. Расстояние — в логарифмической шкале:
+      // от Нептуна к Земле без рывка в конце.
       if (f.endDirection) {
-        this.scratch.copy(f.startDirection).lerp(f.endDirection, eased);
-        if (this.scratch.lengthSq() > 1e-6) this.camera.position.copy(this.scratch.normalize());
+        this.fullTurn.setFromUnitVectors(f.startDirection, f.endDirection);
+        this.turn.identity().slerp(this.fullTurn, eased);
+        this.camera.position.copy(f.startDirection).applyQuaternion(this.turn);
       }
       this.setDistance(Math.exp(THREE.MathUtils.lerp(Math.log(f.startDistance), Math.log(f.endDistance), eased)));
       this.flightIntensity = Math.sin(Math.PI * t);
@@ -126,6 +147,7 @@ export class CameraRig {
       this.origin.copy(this.follow());
     }
 
+    this.controls.dampingFactor = 1 - Math.pow(DAMPING_KEPT_PER_60HZ_FRAME, realSeconds * 60);
     this.controls.update();
     // Перенос правой кнопкой сдвигает target; переносим сдвиг в origin и снимаем сопровождение.
     if (this.controls.target.lengthSq() > 0) {
@@ -138,7 +160,13 @@ export class CameraRig {
     }
 
     this.camera.near = Math.max(MIN_NEAR, surfaceDistance * NEAR_TO_SURFACE_SHARE);
-    this.camera.updateProjectionMatrix();
+    this.framingShift += (this.framingTarget - this.framingShift) * (1 - Math.exp(-realSeconds * FRAMING_RATE));
+    // setViewOffset сам пересчитывает проекцию и заодно ставит aspect = fullWidth / fullHeight,
+    // поэтому ширина передаётся равной aspect: иначе кадр сплющится. Высота — 1, сдвиг в долях высоты.
+    const aspect = this.camera.aspect;
+    if (Math.abs(this.framingShift) > 1e-4) this.camera.setViewOffset(aspect, 1, 0, this.framingShift, aspect, 1);
+    else if (this.camera.view?.enabled) this.camera.clearViewOffset();
+    else this.camera.updateProjectionMatrix();
   }
 
   private setDistance(distance: number) {

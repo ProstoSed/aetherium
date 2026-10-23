@@ -20,6 +20,7 @@ import { renderThumbnails } from '../scene/planets/thumbnails';
 import { SkyLayer } from '../scene/sky/SkyLayer';
 import { createGlowTexture } from '../scene/textures';
 import { AdaptiveQuality, type QualityMode } from './AdaptiveQuality';
+import { freeBandCenter } from './framing';
 import { CameraRig, VIEW_DISTANCE_IN_RADII } from './CameraRig';
 import { SPEED_PRESETS, SimulationClock, type SpeedId } from './SimulationClock';
 import { createStore } from './store';
@@ -35,6 +36,8 @@ export type ObservatoryState = {
   reversed: boolean;
   paused: boolean;
   activeEvent: EventId | null;
+  /** Куда смотрит идущее событие: тело или весь обзор (null). */
+  eventFocus: BodyId | null;
   autoEvents: boolean;
   autoInterval: number;
   showOrbits: boolean;
@@ -66,16 +69,25 @@ export type FrameInfo = {
 };
 
 type Pending = { at: number; action: () => void };
+/** Панель интерфейса поверх сцены. framing — учитывать ли её, выбирая, где по высоте держать центр кадра. */
+type Occluder = { element: HTMLElement; framing: boolean };
 
 const SCALE_CHANGE_COVER_DELAY = 0.18;
 const EVENT_START_AFTER_SCALE_CHANGE = 0.45;
 const CLICK_MOVE_TOLERANCE_PX = 5;
 const PICK_RADIUS_PX = 18;
+/** Тела ближе друг к другу на экране, чем это, касанием не различить: выбирается крупное (Земля, а не Луна). */
+const PICK_TIE_PX = 4;
 const SUN_LIGHT_INTENSITY = 3.2;
 const AMBIENT_INTENSITY = 0.1;
 const NEAR_BODY_FAR_RADII = 16;
 const NEAR_BODY_CLOSE_RADII = 2.5;
 const FREE_CAMERA_MIN_DISTANCE: Record<ScaleMode, number> = { cinematic: 0.5, true: 0.01 };
+/**
+ * Плёнка мерцает каждый кадр, а на пиках даёт вспышки на весь экран и тряску. Тому, кто попросил
+ * систему уменьшить движение, она по умолчанию выключена; включить можно в настройках.
+ */
+const DEFAULT_FILM: FilmIntensity = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'off' : 'soft';
 
 export class Observatory {
   readonly store = createStore<ObservatoryState>({
@@ -86,12 +98,13 @@ export class Observatory {
     reversed: false,
     paused: false,
     activeEvent: null,
+    eventFocus: null,
     autoEvents: true,
     autoInterval: 120,
     showOrbits: true,
     showLabels: true,
     showAsteroids: true,
-    film: 'soft',
+    film: DEFAULT_FILM,
     quality: 'auto',
     history: [],
     showConstellations: true,
@@ -125,6 +138,7 @@ export class Observatory {
   private readonly pending: Pending[] = [];
   private readonly frame: FrameInfo;
   private sunBrightness = 1;
+  private eventView: { focus: BodyId | null; distance: number } | null = null;
   private historyKey = 0;
   private readonly stopListeningLanguage: () => void;
   private animationFrame = 0;
@@ -132,6 +146,9 @@ export class Observatory {
   private width = 1;
   private height = 1;
   private pointerDown = { x: 0, y: 0 };
+  private readonly occluders = new Set<Occluder>();
+  private readonly occluderRects: DOMRect[] = [];
+  private readonly coveredBands: [number, number][] = [];
   private readonly scratch = { world: new THREE.Vector3(), projected: new THREE.Vector3(), scene: { x: 0, y: 0, z: 0 } as Vec3 };
 
   constructor(private readonly host: HTMLElement, labelsLayer: HTMLElement, hud: HTMLElement) {
@@ -157,14 +174,14 @@ export class Observatory {
 
     this.events = new EventDirector(this.createScenarioContext(), {
       onStart: (info, scenario) => {
-        this.store.set({ activeEvent: info.id });
+        this.store.set({ activeEvent: info.id, eventFocus: scenario.preferredView.focus });
         this.addHistory(info.id, 'started');
-        const { focus, distance } = scenario.preferredView;
-        this.store.set({ focused: focus, selected: focus ?? this.store.get().selected });
-        this.flyToTarget(focus, distance);
+        this.eventView = scenario.preferredView;
+        this.showEvent();
       },
       onEnd: (info, interrupted) => {
-        this.store.set({ activeEvent: null });
+        this.store.set({ activeEvent: null, eventFocus: null });
+        this.eventView = null;
         this.events.resetCountdown(this.store.get().autoInterval);
         this.addHistory(info.id, interrupted ? 'interrupted' : 'completed');
       },
@@ -265,6 +282,14 @@ export class Observatory {
     this.events.stop();
   }
 
+  /** Камера — туда, откуда событие задумано смотреть: после выбора другого тела к нему иначе не вернуться. */
+  showEvent() {
+    if (!this.eventView) return;
+    const { focus, distance } = this.eventView;
+    this.store.set({ focused: focus, selected: focus ?? this.store.get().selected });
+    this.flyToTarget(focus, distance);
+  }
+
   updateSettings(patch: Partial<Pick<ObservatoryState, 'autoEvents' | 'autoInterval' | 'showOrbits' | 'showLabels' | 'showAsteroids' | 'showConstellations' | 'film' | 'quality'>>) {
     this.store.set(patch);
     if (patch.autoInterval !== undefined) this.events.resetCountdown(patch.autoInterval);
@@ -276,6 +301,17 @@ export class Observatory {
 
   clearHistory() {
     this.store.set({ history: [] });
+  }
+
+  /**
+   * Регистрирует панель интерфейса поверх сцены: подписи тел под ней прячутся, а панели с framing
+   * сдвигают кадр так, чтобы центр внимания стоял в свободной от них полосе (на телефоне карточка
+   * тела закрывает нижнюю половину экрана). Возвращает функцию отмены.
+   */
+  addOccluder(element: HTMLElement, framing: boolean): () => void {
+    const occluder = { element, framing };
+    this.occluders.add(occluder);
+    return () => { this.occluders.delete(occluder); };
   }
 
   // --- Кадр ------------------------------------------------------------------
@@ -310,6 +346,7 @@ export class Observatory {
     this.belt.points.visible = state.showAsteroids;
     this.belt.update(this.clock.julianDate, state.scaleMode, this.renderer.getPixelRatio());
 
+    this.measureOccluders();
     this.rig.update(realSeconds, this.nearestSurfaceDistance());
     if (!this.rig.isFollowing && state.focused) this.store.set({ focused: null });
     this.system.position.copy(this.rig.origin).negate();
@@ -325,7 +362,7 @@ export class Observatory {
     this.bodies.updateLighting(camera, now, this.sunBrightness);
     this.sky.update(camera, this.renderer.getPixelRatio(), state.showConstellations);
     this.bodies.updateMarkers(camera, this.height, state.scaleMode === 'true' || state.showLabels);
-    this.labels.update(this.bodies.views, camera, this.width, this.height, state.selected, state.showLabels);
+    this.labels.update(this.bodies.views, camera, this.width, this.height, state.selected, state.showLabels, this.occluderRects);
 
     this.peaks.sample(now, this.peakState);
     const sunScreen = this.projectSystemPoint(sun.root.position);
@@ -506,6 +543,24 @@ export class Observatory {
 
   // --- Служебное -------------------------------------------------------------
 
+  /**
+   * Прямоугольники панелей читаются каждый кадр: они двигаются (анимации, смена раскладки, язык),
+   * а размер при этом может не меняться, и ResizeObserver об этом не скажет. Раскладка к этому
+   * моменту обычно уже посчитана, так что чтение почти бесплатно.
+   */
+  private measureOccluders() {
+    this.occluderRects.length = 0;
+    this.coveredBands.length = 0;
+    const centerX = this.width / 2;
+    for (const { element, framing } of this.occluders) {
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      this.occluderRects.push(rect);
+      if (framing && rect.left < centerX && rect.right > centerX) this.coveredBands.push([rect.top, rect.bottom]);
+    }
+    this.rig.setFramingCenter(freeBandCenter(this.coveredBands, this.height));
+  }
+
   private schedule(at: number, action: () => void) {
     this.pending.push({ at, action });
   }
@@ -547,12 +602,15 @@ export class Observatory {
     this.pointerDown = { x: event.clientX, y: event.clientY };
   };
 
-  /** Выбор тела щелчком. По экранной близости, а не лучом: в истинном масштабе диск меньше пикселя. */
+  /**
+   * Выбор тела щелчком. По экранной близости, а не лучом: в истинном масштабе диск меньше пикселя.
+   * Ближе всех — тот, у кого меньше доля от зоны захвата; почти равные кандидаты решаются в пользу крупного.
+   */
   private readonly onPointerUp = (event: PointerEvent) => {
     if (Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > CLICK_MOVE_TOLERANCE_PX) return;
     const rect = this.renderer.domElement.getBoundingClientRect();
     const x = event.clientX - rect.left, y = event.clientY - rect.top;
-    let best: { id: BodyId; score: number } | null = null;
+    let best: { id: BodyId; gap: number; score: number; radiusKm: number } | null = null;
     for (const body of BODIES) {
       const view = this.bodies.views.get(body.id)!;
       if (!view.root.visible || view.root.scale.x < 0.01) continue;
@@ -561,7 +619,10 @@ export class Observatory {
       const diskPx = this.screenRadius(view.root.position, view.radius) * this.height;
       const gap = Math.hypot(screen.x * this.width - x, screen.y * this.height - y);
       const reach = Math.max(diskPx, PICK_RADIUS_PX);
-      if (gap <= reach && (!best || gap / reach < best.score)) best = { id: body.id, score: gap / reach };
+      if (gap > reach) continue;
+      const candidate = { id: body.id, gap, score: gap / reach, radiusKm: body.radiusKm };
+      const tie = best && Math.abs(gap - best.gap) < PICK_TIE_PX;
+      if (!best || (tie ? candidate.radiusKm > best.radiusKm : candidate.score < best.score)) best = candidate;
     }
     if (best) this.select(best.id);
   };

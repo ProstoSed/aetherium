@@ -10,10 +10,22 @@ const FIRST_WIDE_CODE_POINT = 0x2e80;
 const LABEL_PADDING_PX = 22;
 const GAP_ABOVE_DISK_PX = 8;
 const VIEWPORT_MARGIN_PX = 40;
+/** Ширина подписи оценивается по числу знаков, поэтому у панелей запас: подпись не должна выглядывать из-под края. */
+const BLOCKED_MARGIN_PX = 8;
+/**
+ * Кому уступать место при наложении, после выбранного тела. Земля первая: в обзоре она рядом
+ * с Солнцем и Луной и без этого почти всегда пряталась. Солнце узнаётся и без подписи, Луна —
+ * спутник Земли и в обзоре сливается с ней.
+ */
+const LABEL_PRIORITY: BodyId[] = ['earth', 'jupiter', 'saturn', 'mars', 'venus', 'uranus', 'neptune', 'mercury', 'sun', 'moon'];
 
 type Placed = { left: number; right: number; top: number; bottom: number };
 type Projected = { x: number; y: number; diskPx: number; distance: number; inFront: boolean };
 type LabelState = { element: HTMLButtonElement; halfWidth: number; x: number; y: number; shown: boolean; chosen: boolean };
+
+function intersects(a: Placed, b: Placed, margin = 0): boolean {
+  return a.left < b.right + margin && a.right > b.left - margin && a.top < b.bottom + margin && a.bottom > b.top - margin;
+}
 
 /** Ширина подписи по числу знаков: измерять узлы каждый кадр — это пересчёт раскладки. */
 function estimateHalfWidth(text: string): number {
@@ -25,7 +37,7 @@ function estimateHalfWidth(text: string): number {
 /**
  * Подписи тел — обычные кнопки поверх холста. Позиция пишется прямо в style.transform
  * и только при изменении: React в покадровой работе не участвует.
- * Перекрывающиеся подписи прячутся по приоритету — выбранное тело, Солнце, крупные планеты.
+ * Перекрывающиеся подписи прячутся по приоритету (LABEL_PRIORITY), подписи под панелями — всегда.
  */
 export class Labels {
   private readonly states = new Map<BodyId, LabelState>();
@@ -44,7 +56,7 @@ export class Labels {
       container.appendChild(element);
       this.states.set(body.id, { element, halfWidth: 0, x: -1, y: -1, shown: false, chosen: false });
     }
-    this.priority = [...BODIES].sort((a, b) => b.radiusKm - a.radiusKm).map(b => b.id);
+    this.priority = LABEL_PRIORITY;
   }
 
   setNames(nameOf: (id: BodyId) => string) {
@@ -55,7 +67,8 @@ export class Labels {
     }
   }
 
-  update(views: Map<BodyId, BodyView>, camera: THREE.PerspectiveCamera, width: number, height: number, selected: BodyId | null, enabled: boolean) {
+  /** blocked — прямоугольники панелей интерфейса: подпись под панелью не показывается, даже у выбранного тела. */
+  update(views: Map<BodyId, BodyView>, camera: THREE.PerspectiveCamera, width: number, height: number, selected: BodyId | null, enabled: boolean, blocked: readonly Placed[]) {
     const placed: Placed[] = [];
     const pixelsPerRadian = height / THREE.MathUtils.degToRad(camera.fov);
     const order = selected ? [selected, ...this.priority.filter(id => id !== selected)] : this.priority;
@@ -87,8 +100,8 @@ export class Labels {
         if (shown) {
           const halfWidth = state.halfWidth;
           const rect = { left: x - halfWidth, right: x + halfWidth, top: y - LABEL_HEIGHT_PX, bottom: y };
-          const overlaps = placed.some(p => rect.left < p.right && rect.right > p.left && rect.top < p.bottom && rect.bottom > p.top);
-          shown = !overlaps || id === selected;
+          const overlaps = placed.some(p => intersects(rect, p));
+          shown = (!overlaps || id === selected) && !blocked.some(b => intersects(rect, b, BLOCKED_MARGIN_PX));
           if (shown) placed.push(rect);
         }
       }

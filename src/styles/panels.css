@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  min-width: 360px;
+  min-width: 340px;
   padding: 8px 8px 8px 10px;
   border-radius: 999px;
   background: var(--panel);
@@ -15,6 +15,26 @@
   animation: banner-in 0.5s var(--ease-spring);
   --banner-accent: var(--calm);
   --banner-glow: rgba(143, 211, 196, 0.35);
+}
+
+/* Промежуток верхней панели уже баннера (узкое окно или длинные подписи) — баннер под панелью,
+   у правого края ленты тел: по центру он заехал бы под карточку тела справа. */
+.event-banner.is-lowered {
+  top: calc(var(--top-bar-bottom, 82px) + 12px);
+  left: calc(var(--rail-right, 240px) + 16px);
+  transform: none;
+  animation-name: banner-in-lowered;
+}
+
+/* Опущенный баннер на узком окне доходит до карточки тела — карточка встаёт под него. */
+.hud:has(.event-banner.is-lowered) .body-card {
+  top: calc(var(--top-bar-bottom, 82px) + 88px);
+  max-height: calc(100% - var(--top-bar-bottom, 82px) - 88px - var(--edge) - 110px);
+}
+
+@keyframes banner-in-lowered {
+  from { opacity: 0; transform: translateY(-14px) scale(0.96); }
+  to { opacity: 1; transform: none; }
 }
 
 .event-banner.intensity-mid {
@@ -70,6 +90,8 @@
   line-height: 1.1;
   color: var(--text);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .banner-progress {
@@ -118,6 +140,43 @@
 
 .banner-stop:active {
   transform: scale(0.9);
+}
+
+/* --- Подсказка первого посещения -------------------------------------------------- */
+.first-steps {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge) + var(--bottom-bar-height, 70px) + 16px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: max-content;
+  max-width: min(560px, calc(100vw - 2 * var(--edge)));
+  padding: 10px 12px 10px 20px;
+  border-radius: var(--radius-panel);
+  background: var(--panel);
+  box-shadow: var(--shadow-panel);
+  animation: first-steps-in 0.5s var(--ease-out);
+}
+
+.first-steps p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  text-wrap: pretty;
+}
+
+.first-steps .text-button {
+  flex: none;
+  margin: 0;
+  color: var(--brass-bright);
+}
+
+@keyframes first-steps-in {
+  from { opacity: 0; transform: translate(-50%, 10px); }
+  to { opacity: 1; transform: translateX(-50%); }
 }
 
 /* --- Кнопка событий -------------------------------------------------------------- */
@@ -298,7 +357,7 @@
 }
 
 .segmented button {
-  min-height: 34px;
+  min-height: 40px;
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
@@ -321,15 +380,30 @@
 }
 
 /* --- Справка -------------------------------------------------------------------------- */
+/* Модальный <dialog> на весь экран: он и есть затемнение, а стандартный ::backdrop не нужен. */
 .dialog-backdrop {
-  position: absolute;
+  position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
   display: grid;
   place-items: center;
   padding: var(--edge);
+  color: inherit;
   background: radial-gradient(circle at center, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.75));
   animation: fade-in 0.3s ease;
-  z-index: 20;
+}
+
+.dialog-backdrop:not([open]) {
+  display: none;
+}
+
+.dialog-backdrop::backdrop {
+  background: transparent;
 }
 
 @keyframes fade-in {
@@ -400,7 +474,7 @@
 
 .text-button {
   margin-top: 14px;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 4px;
   font-size: 13px;
   font-weight: 500;
@@ -416,13 +490,20 @@
 
 @media (max-width: 760px) {
   .event-banner {
-    top: calc(var(--edge) + 150px);
+    top: calc(var(--top-bar-bottom, 118px) + 60px);
     min-width: 0;
     width: calc(100vw - 2 * var(--edge));
   }
   .banner-name { font-size: 18px; }
-  .event-launcher { grid-column: 1; grid-row: 1; justify-self: end; padding-right: 7px; }
-  .launcher-text { display: none; }
-  .settings-panel { left: var(--edge); width: auto; top: calc(var(--edge) + 104px); }
+  .event-launcher { grid-column: 1; grid-row: 1; justify-self: end; padding-right: 16px; }
+  .launcher-text strong { font-size: 18px; }
+  .settings-panel { left: var(--edge); width: auto; top: calc(var(--top-bar-bottom, 118px) + 10px); }
+  /* На телефоне баннер во всю ширину: длинное название переносится на вторую строку, а не обрезается. */
+  .banner-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+  }
   .help-controls { grid-template-columns: 1fr; }
 }

@@ -8,7 +8,7 @@ import { CINEMATIC_SHADER_CONSTANTS, type ScaleMode } from '../physics/scale';
  * сколько бы частиц ни было, а внутренние части пояса обгоняют внешние, как на деле.
  * Распределение полуосей повторяет щели Кирквуда (резонансы с Юпитером 3:1, 5:2, 7:3).
  */
-const ASTEROID_COUNT = 7000;
+export const ASTEROID_COUNT = 7000;
 const KIRKWOOD_GAPS_AU = [2.502, 2.825, 2.958];
 const KIRKWOOD_GAP_HALF_WIDTH_AU = 0.025;
 

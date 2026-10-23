@@ -18,6 +18,7 @@ const CYRILLIC_OR_CJK = /[Ѐ-ӿ一-鿿]/;
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('test.language-set')) {
       localStorage.setItem('aetherium.language', 'en');
+      localStorage.setItem('aetherium.first-steps-seen', '1');
       sessionStorage.setItem('test.language-set', '1');
     }
   });
@@ -52,6 +53,13 @@ const CYRILLIC_OR_CJK = /[Ѐ-ӿ一-鿿]/;
   await page.locator('.event-card.event-blackhole').click();
   await page.waitForTimeout(1200);
   expect('event is running', (await page.locator('.banner-name').innerText()) === 'Uninvited Abyss');
+  await page.locator('.rail-item[data-body="mars"]').click();
+  await page.waitForTimeout(300);
+  const backToEvent = page.locator('.event-banner button[aria-label="Back to the event"]');
+  expect('picking another body offers a way back to the event', await backToEvent.count() === 1);
+  await backToEvent.click();
+  await page.waitForTimeout(300);
+  expect('back to the event refocuses it', await backToEvent.count() === 0);
   await page.locator('.banner-stop').click();
   await page.waitForTimeout(400);
   expect('event stopped', await page.locator('.event-banner').count() === 0);
@@ -69,6 +77,20 @@ const CYRILLIC_OR_CJK = /[Ѐ-ӿ一-鿿]/;
   expect('orbits can be turned off', !(await orbitsSwitch.isChecked()));
   await orbitsSwitch.click();
   await page.keyboard.press('Escape');
+  expect('Esc closes settings and returns focus to its button', await page.evaluate(() => document.activeElement?.classList.contains('tool-settings')));
+
+  await page.locator('.rail-item[data-body="earth"]').click();
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  expect('Esc closes the body card when no panel is open', await page.locator('.body-card').count() === 0);
+
+  await page.locator('.tool-help').click();
+  for (let i = 0; i < 8; i++) await page.keyboard.press('Tab');
+  expect('help dialog keeps keyboard focus inside', await page.evaluate(() => Boolean(document.activeElement?.closest('.help-dialog'))));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  expect('Esc closes help and returns focus to its button', (await page.locator('.dialog-backdrop').count()) === 0 && await page.evaluate(() => document.activeElement?.classList.contains('tool-help')));
 
   // Языки: смена в меню переводит интерфейс, карточку, хронику и язык документа, выбор переживает перезагрузку.
   const chooseLanguage = async code => {

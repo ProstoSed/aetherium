@@ -15,9 +15,17 @@ export function formatDistance(t: Messages, km: number): string {
   return t.units.distance(km, numberText(t.locale));
 }
 
-/** Сколько идёт свет: у Луны секунды, у Нептуна часы. */
+/**
+ * Сколько идёт свет: у Луны секунды, у Нептуна часы. Округление делается до разбиения
+ * на минуты и секунды, иначе 4 мин 59,6 с превращаются в «4 мин 60 с».
+ */
 export function formatLightTime(t: Messages, km: number): string {
-  return t.units.lightTime(km / SPEED_OF_LIGHT_KM_S, numberText(t.locale));
+  const seconds = km / SPEED_OF_LIGHT_KM_S;
+  if (Math.round(seconds * 100) < 6000) return t.units.lightSeconds(numberText(t.locale)(seconds, 2));
+  const totalSeconds = Math.round(seconds);
+  if (totalSeconds < 3600) return t.units.minutesSeconds(Math.floor(totalSeconds / 60), totalSeconds % 60);
+  const totalMinutes = Math.round(seconds / 60);
+  return t.units.hoursMinutes(Math.floor(totalMinutes / 60), totalMinutes % 60);
 }
 
 export function formatCountdown(seconds: number): string {

@@ -1,4 +1,5 @@
 import { Orbit } from 'lucide-react';
+import { useRef } from 'react';
 import { BODIES, MOON_MEAN_DISTANCE_KM, type BodyId } from '../data/bodies';
 import { PLANET_ELEMENTS } from '../data/orbitalElements';
 import { useI18n, type Messages } from '../i18n';
@@ -6,6 +7,8 @@ import { formatDistance } from '../i18n/format';
 import { numberText } from '../i18n/numbers';
 import { BodyOrb } from './BodyOrb';
 import { useObservatory, useObservatoryState } from './observatoryContext';
+import { useLayoutVariable } from './useLayoutVariable';
+import { useOccluder } from './useOccluder';
 
 /** Подпись под названием: среднее расстояние от Солнца по большой полуоси — порядок тел виден сразу. */
 function distanceCaption(t: Messages, id: BodyId): string {
@@ -17,14 +20,19 @@ function distanceCaption(t: Messages, id: BodyId): string {
 /** Размер миниатюры: у Сатурна в кадре кольца, диск в ней мельче — миниатюра крупнее. */
 const THUMB_SIZE: Partial<Record<BodyId, number>> = { sun: 34, moon: 24, saturn: 46, uranus: 40 };
 
+const rightEdgeOf = (rect: DOMRect) => rect.right;
+
 export function BodyRail() {
   const observatory = useObservatory();
   const { t } = useI18n();
   const focused = useObservatoryState(s => s.focused);
   const selected = useObservatoryState(s => s.selected);
+  const railRef = useRef<HTMLElement>(null);
+  useOccluder(railRef, true);
+  useLayoutVariable(railRef, '--rail-right', rightEdgeOf);
 
   return (
-    <nav className="body-rail" aria-label={t.rail.label}>
+    <nav className="body-rail" aria-label={t.rail.label} ref={railRef}>
       <button type="button" className={`rail-item rail-overview ${!focused ? 'is-active' : ''}`} onClick={() => observatory.overview()}>
         <span className="rail-thumb"><Orbit size={18} strokeWidth={1.4} /></span>
         <span className="rail-text">

@@ -5,6 +5,7 @@ import { SPEED_PRESETS } from '../engine/SimulationClock';
 import { useI18n } from '../i18n';
 import { dateFromJulianDate } from '../physics/time';
 import { useFrame, useObservatory, useObservatoryState, writeText } from './observatoryContext';
+import { useOccluder } from './useOccluder';
 
 /** Время: пауза, обратный ход, скорость ступенями и дата. */
 export function TimeDeck() {
@@ -15,6 +16,8 @@ export function TimeDeck() {
   const speedId = useObservatoryState(s => s.speedId);
   const dateRef = useRef<HTMLSpanElement>(null);
   const accuracyRef = useRef<HTMLSpanElement>(null);
+  const deckRef = useRef<HTMLElement>(null);
+  useOccluder(deckRef, true);
   const speedIndex = SPEED_PRESETS.findIndex(p => p.id === speedId);
   const speedText = t.speeds[SPEED_PRESETS[speedIndex].id];
 
@@ -26,7 +29,7 @@ export function TimeDeck() {
   });
 
   return (
-    <section className="time-deck" aria-label={t.time.deck}>
+    <section className="time-deck" aria-label={t.time.deck} ref={deckRef}>
       <div className="deck-buttons">
         <button type="button" className={`deck-button ${reversed ? 'is-on' : ''}`} title={reversed ? t.time.reverseOn : t.time.reverseOff} aria-label={t.time.reverse} aria-pressed={reversed} onClick={() => observatory.setReversed(!reversed)}>
           <Rewind size={17} strokeWidth={1.7} />

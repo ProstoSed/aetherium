@@ -375,12 +375,19 @@ export class SkyLayer {
     fillConstellationNames(this.names, this.language);
   }
 
-  /** Поворот и перспектива — как у основной камеры; положение — всегда в центре небесной сферы. */
+  /**
+   * Поворот и перспектива — как у основной камеры, вместе со сдвигом окна проекции (иначе звёзды
+   * разъехались бы с планетами); положение — всегда в центре небесной сферы.
+   */
   update(mainCamera: THREE.PerspectiveCamera, pixelRatio: number, showConstellations: boolean) {
     this.camera.quaternion.copy(mainCamera.quaternion);
-    if (this.camera.fov !== mainCamera.fov || this.camera.aspect !== mainCamera.aspect) {
+    const shift = mainCamera.view?.enabled ? mainCamera.view.offsetY : 0;
+    const ownShift = this.camera.view?.enabled ? this.camera.view.offsetY : 0;
+    if (this.camera.fov !== mainCamera.fov || this.camera.aspect !== mainCamera.aspect || shift !== ownShift) {
       this.camera.fov = mainCamera.fov;
       this.camera.aspect = mainCamera.aspect;
+      if (shift !== 0) this.camera.setViewOffset(mainCamera.aspect, 1, 0, shift, mainCamera.aspect, 1);
+      else this.camera.clearViewOffset();
       this.camera.updateProjectionMatrix();
     }
     this.camera.updateMatrixWorld();

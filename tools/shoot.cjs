@@ -13,7 +13,10 @@ fs.mkdirSync(outDir, { recursive: true });
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
-  await page.addInitScript(code => localStorage.setItem('aetherium.language', code), language);
+  await page.addInitScript(code => {
+    localStorage.setItem('aetherium.language', code);
+    localStorage.setItem('aetherium.first-steps-seen', '1');
+  }, language);
   const errors = [];
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`${m.type()}: ${m.text()}`); });

@@ -15,6 +15,7 @@ export const fr: Messages = {
   },
   brand: { tagline: 'mécanique céleste' },
   intro: { developing: 'Développement de la pellicule…', ready: 'Prêt', loadingLabel: 'Chargement de la scène', readyLabel: 'Scène prête' },
+  firstSteps: { text: 'Cliquez sur une planète pour ouvrir sa fiche, ou lancez un événement et regardez les orbites réagir.', dismiss: 'Compris' },
   webglError: { title: 'WebGL 2 est nécessaire', hint: 'Activez l’accélération matérielle dans les réglages du navigateur, puis rechargez la page.' },
 
   topBar: {
@@ -38,7 +39,7 @@ export const fr: Messages = {
     view: 'Affichage',
     orbits: { label: 'Orbites', hint: 'Vraies ellipses à la date actuelle' },
     labels: { label: 'Étiquettes', hint: 'Noms des corps dans la scène' },
-    asteroids: { label: 'Ceinture d’astéroïdes', hint: '7000 corps sur leurs propres orbites' },
+    asteroids: { label: 'Ceinture d’astéroïdes', hint: count => `${count} corps sur leurs propres orbites` },
     constellations: { label: 'Constellations', hint: 'Tracés et noms de l’UAI' },
     film: 'Pellicule et objectif',
     filmStrength: 'Intensité des défauts',
@@ -61,7 +62,7 @@ export const fr: Messages = {
       ['Bouton droit', 'déplacer le centre de la vue'],
       ['Clic sur un corps ou son nom', 'fiche du corps'],
       ['Espace', 'pause'],
-      ['Échap', 'fermer le panneau'],
+      ['Échap', 'fermer le panneau ou la fiche'],
     ],
     notes: [
       [
@@ -110,12 +111,8 @@ export const fr: Messages = {
     au: value => `${value} UA`,
     km: value => `${value} km`,
     distance: (km, n) => (km >= 1e6 ? `${n(km / 1e6, km < 1e8 ? 1 : 0)} millions de km` : `${n(km, 0)} km`),
-    lightTime: (seconds, n) => {
-      if (seconds < 60) return `${n(seconds, 2)} s`;
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes} min ${Math.round(seconds % 60)} s`;
-      return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
-    },
+    lightSeconds: value => `${value} s`,
+    minutesSeconds: (minutes, seconds) => `${minutes} min ${seconds} s`,
     seconds: count => `${count} s`,
     earthMasses: (value, count) => `${value} ${plural(count, 'masse terrestre', 'masses terrestres')}`,
     days: (value, count) => `${value} ${plural(count, 'jour', 'jours')}`,
@@ -195,6 +192,7 @@ export const fr: Messages = {
     inProgress: 'Événement en cours',
     settling: 'Retour à l’équilibre',
     stop: 'Arrêter l’événement',
+    showEvent: 'Revenir à l’événement',
     chronicleEmpty: 'Rien pour l’instant. Chaque événement de cette séance laissera ici sa trace.',
     clearChronicle: 'Effacer la chronique',
     completed: name => `${name} — terminé`,

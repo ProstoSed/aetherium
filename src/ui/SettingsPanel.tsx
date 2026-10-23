@@ -1,7 +1,12 @@
+import { useRef } from 'react';
 import type { QualityMode } from '../engine/AdaptiveQuality';
 import { useI18n } from '../i18n';
+import { numberText } from '../i18n/numbers';
 import type { FilmIntensity } from '../lens/LensDirector';
+import { ASTEROID_COUNT } from '../scene/AsteroidBelt';
 import { useObservatory, useObservatoryState } from './observatoryContext';
+import { useOccluder } from './useOccluder';
+import { usePanelFocus } from './usePanelFocus';
 
 const FILM_LEVELS: FilmIntensity[] = ['off', 'soft', 'strong'];
 const AUTO_INTERVALS_SECONDS = [60, 120, 300];
@@ -37,13 +42,16 @@ export function SettingsPanel() {
   const s = useObservatoryState(state => state);
   const update = observatory.updateSettings.bind(observatory);
   const text = t.settings;
+  const panelRef = useRef<HTMLElement>(null);
+  usePanelFocus(panelRef, 'input');
+  useOccluder(panelRef, false);
 
   return (
-    <section className="settings-panel" aria-label={text.title}>
+    <section className="settings-panel" aria-label={text.title} ref={panelRef}>
       <h3 className="panel-title">{text.view}</h3>
       <Switch label={text.orbits.label} hint={text.orbits.hint} checked={s.showOrbits} onChange={v => update({ showOrbits: v })} />
       <Switch label={text.labels.label} hint={text.labels.hint} checked={s.showLabels} onChange={v => update({ showLabels: v })} />
-      <Switch label={text.asteroids.label} hint={text.asteroids.hint} checked={s.showAsteroids} onChange={v => update({ showAsteroids: v })} />
+      <Switch label={text.asteroids.label} hint={text.asteroids.hint(numberText(t.locale)(ASTEROID_COUNT))} checked={s.showAsteroids} onChange={v => update({ showAsteroids: v })} />
       <Switch label={text.constellations.label} hint={text.constellations.hint} checked={s.showConstellations} onChange={v => update({ showConstellations: v })} />
 
       <h3 className="panel-title">{text.film}</h3>

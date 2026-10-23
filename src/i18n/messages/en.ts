@@ -17,6 +17,8 @@ export const en = {
   },
   brand: { tagline: 'celestial mechanics' },
   intro: { developing: 'Developing the film…', ready: 'Ready', loadingLabel: 'Loading the scene', readyLabel: 'Scene ready' },
+  /** Подсказка при первом посещении: что здесь можно делать. */
+  firstSteps: { text: 'Click a planet to open its card — or start an event and watch the orbits react.', dismiss: 'Got it' },
   webglError: { title: 'WebGL 2 is required', hint: 'Turn on hardware acceleration in your browser settings and reload the page.' },
 
   topBar: {
@@ -40,7 +42,7 @@ export const en = {
     view: 'View',
     orbits: { label: 'Orbits', hint: 'True ellipses for the current date' },
     labels: { label: 'Labels', hint: 'Body names in the scene' },
-    asteroids: { label: 'Asteroid belt', hint: '7000 bodies on their own orbits' },
+    asteroids: { label: 'Asteroid belt', hint: (count: string) => `${count} bodies on their own orbits` },
     constellations: { label: 'Constellations', hint: 'IAU lines and names' },
     film: 'Film and lens',
     filmStrength: 'Artefact strength',
@@ -63,7 +65,7 @@ export const en = {
       ['Right button', 'move the view centre'],
       ['Click a body or its label', 'body details'],
       ['Space', 'pause'],
-      ['Esc', 'close the panel'],
+      ['Esc', 'close the panel or card'],
     ] as [string, string][],
     /** Абзацы справки: жирный зачин и продолжение. */
     notes: [
@@ -115,12 +117,9 @@ export const en = {
     km: (value: string) => `${value} km`,
     /** Расстояние целиком: большие числа — в миллионах километров, иначе цифры не читаются. */
     distance: (km: number, n: NumberText) => (km >= 1e6 ? `${n(km / 1e6, km < 1e8 ? 1 : 0)} million km` : `${n(km, 0)} km`),
-    lightTime: (seconds: number, n: NumberText) => {
-      if (seconds < 60) return `${n(seconds, 2)} s`;
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes} min ${Math.round(seconds % 60)} s`;
-      return `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
-    },
+    /** Секунды света с дробью: у Луны «1,28 s». */
+    lightSeconds: (value: string) => `${value} s`,
+    minutesSeconds: (minutes: number, seconds: number) => `${minutes} min ${seconds} s`,
     seconds: (count: number) => `${count} s`,
     earthMasses: (value: string, count: number) => `${value} ${count === 1 ? 'Earth mass' : 'Earth masses'}`,
     days: (value: string, count: number) => `${value} ${count === 1 ? 'day' : 'days'}`,
@@ -200,6 +199,7 @@ export const en = {
     inProgress: 'Event in progress',
     settling: 'Returning to balance',
     stop: 'Stop event',
+    showEvent: 'Back to the event',
     chronicleEmpty: 'Nothing here yet. Every event of this session will leave a trace.',
     clearChronicle: 'Clear chronicle',
     completed: (name: string) => `${name} — completed`,

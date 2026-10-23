@@ -15,6 +15,7 @@ export const ru: Messages = {
   },
   brand: { tagline: 'механика неба' },
   intro: { developing: 'Проявляем плёнку…', ready: 'Готово', loadingLabel: 'Загрузка сцены', readyLabel: 'Сцена готова' },
+  firstSteps: { text: 'Нажмите на планету, чтобы открыть её карточку, — или запустите событие и посмотрите, как отзовутся орбиты.', dismiss: 'Понятно' },
   webglError: { title: 'Нужен WebGL 2', hint: 'Включите аппаратное ускорение в настройках браузера и перезагрузите страницу.' },
 
   topBar: {
@@ -38,7 +39,7 @@ export const ru: Messages = {
     view: 'Вид',
     orbits: { label: 'Орбиты', hint: 'Настоящие эллипсы на текущую дату' },
     labels: { label: 'Подписи', hint: 'Названия тел в сцене' },
-    asteroids: { label: 'Пояс астероидов', hint: '7000 тел со своими орбитами' },
+    asteroids: { label: 'Пояс астероидов', hint: count => `${count} тел со своими орбитами` },
     constellations: { label: 'Созвездия', hint: 'Линии и названия по каталогу МАС' },
     film: 'Плёнка и объектив',
     filmStrength: 'Сила помех',
@@ -61,7 +62,7 @@ export const ru: Messages = {
       ['Правая кнопка', 'сдвинуть центр обзора'],
       ['Щелчок по телу или подписи', 'сведения о теле'],
       ['Пробел', 'пауза'],
-      ['Esc', 'закрыть панель'],
+      ['Esc', 'закрыть панель или карточку'],
     ],
     notes: [
       [
@@ -110,12 +111,8 @@ export const ru: Messages = {
     au: value => `${value} а. е.`,
     km: value => `${value} км`,
     distance: (km, n) => (km >= 1e6 ? `${n(km / 1e6, km < 1e8 ? 1 : 0)} млн км` : `${n(km, 0)} км`),
-    lightTime: (seconds, n) => {
-      if (seconds < 60) return `${n(seconds, 2)} с`;
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes} мин ${Math.round(seconds % 60)} с`;
-      return `${Math.floor(minutes / 60)} ч ${minutes % 60} мин`;
-    },
+    lightSeconds: value => `${value} с`,
+    minutesSeconds: (minutes, seconds) => `${minutes} мин ${seconds} с`,
     seconds: count => `${count} с`,
     earthMasses: (value, count) => `${value} ${plural(count, { one: 'масса Земли', few: 'массы Земли', many: 'масс Земли' })}`,
     days: (value, count) => `${value} ${plural(count, { one: 'сутки', few: 'суток', many: 'суток' })}`,
@@ -195,6 +192,7 @@ export const ru: Messages = {
     inProgress: 'Идёт событие',
     settling: 'Возвращение к равновесию',
     stop: 'Остановить событие',
+    showEvent: 'Вернуться к событию',
     chronicleEmpty: 'Пока пусто. Здесь останется след каждого события этого сеанса.',
     clearChronicle: 'Очистить хронику',
     completed: name => `${name} — завершено`,

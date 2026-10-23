@@ -10,6 +10,7 @@ export const zh: Messages = {
   },
   brand: { tagline: '天体力学' },
   intro: { developing: '正在冲洗胶片…', ready: '就绪', loadingLabel: '正在加载场景', readyLabel: '场景已就绪' },
+  firstSteps: { text: '点击行星查看介绍，或启动一个事件，看看轨道如何变化。', dismiss: '知道了' },
   webglError: { title: '需要 WebGL 2', hint: '请在浏览器设置中开启硬件加速，然后刷新页面。' },
 
   topBar: {
@@ -33,7 +34,7 @@ export const zh: Messages = {
     view: '显示',
     orbits: { label: '轨道', hint: '当前日期的真实椭圆' },
     labels: { label: '标签', hint: '场景中的天体名称' },
-    asteroids: { label: '小行星带', hint: '7000 个天体，各有各的轨道' },
+    asteroids: { label: '小行星带', hint: count => `${count} 个天体，各有各的轨道` },
     constellations: { label: '星座', hint: '国际天文学联合会的连线与名称' },
     film: '胶片与镜头',
     filmStrength: '干扰强度',
@@ -56,7 +57,7 @@ export const zh: Messages = {
       ['右键', '移动视野中心'],
       ['点击天体或其标签', '天体详情'],
       ['空格', '暂停'],
-      ['Esc', '关闭面板'],
+      ['Esc', '关闭面板或卡片'],
     ],
     notes: [
       [
@@ -109,12 +110,8 @@ export const zh: Messages = {
       if (km >= 1e4) return `${n(km / 1e4, km < 1e6 ? 1 : 0)} 万公里`;
       return `${n(km, 0)} 公里`;
     },
-    lightTime: (seconds, n) => {
-      if (seconds < 60) return `${n(seconds, 2)} 秒`;
-      const minutes = Math.floor(seconds / 60);
-      if (minutes < 60) return `${minutes} 分 ${Math.round(seconds % 60)} 秒`;
-      return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分`;
-    },
+    lightSeconds: value => `${value} 秒`,
+    minutesSeconds: (minutes, seconds) => `${minutes} 分 ${seconds} 秒`,
     seconds: count => `${count} 秒`,
     earthMasses: value => `${value} 倍地球质量`,
     days: value => `${value} 天`,
@@ -194,6 +191,7 @@ export const zh: Messages = {
     inProgress: '事件进行中',
     settling: '恢复平衡',
     stop: '停止事件',
+    showEvent: '回到事件',
     chronicleEmpty: '这里还是空的。本次观看中的每个事件都会在此留下记录。',
     clearChronicle: '清空纪事',
     completed: name => `${name} — 已结束`,

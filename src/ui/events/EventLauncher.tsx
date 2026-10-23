@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { useI18n } from '../../i18n';
 import { formatCountdown } from '../../i18n/format';
 import { useFrame, useObservatoryState, writeText } from '../observatoryContext';
+import { useOccluder } from '../useOccluder';
 
 const RING_RADIUS = 21;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -16,6 +17,8 @@ export function EventLauncher({ open, onToggle }: { open: boolean; onToggle: () 
   const active = useObservatoryState(s => s.activeEvent);
   const ringRef = useRef<SVGCircleElement>(null);
   const countdownRef = useRef<HTMLSpanElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
+  useOccluder(launcherRef, true);
   const counting = autoEvents && !active && scaleMode === 'cinematic';
 
   useFrame(frame => {
@@ -26,7 +29,7 @@ export function EventLauncher({ open, onToggle }: { open: boolean; onToggle: () 
   });
 
   return (
-    <button type="button" className={`event-launcher ${open ? 'is-open' : ''}`} onClick={onToggle} aria-expanded={open}>
+    <button type="button" ref={launcherRef} className={`event-launcher ${open ? 'is-open' : ''}`} onClick={onToggle} aria-expanded={open}>
       <span className="launcher-emblem">
         <svg viewBox="0 0 48 48" aria-hidden="true">
           <circle cx="24" cy="24" r={RING_RADIUS} className="launcher-track" />

@@ -4,6 +4,7 @@ import { BODY_BY_ID } from '../data/bodies';
 import { useI18n } from '../i18n';
 import { formatAu, formatDistance, formatFact, formatLightTime } from '../i18n/format';
 import { BodyOrb } from './BodyOrb';
+import { useOccluder } from './useOccluder';
 import { useFrame, useObservatory, useObservatoryState, writeText } from './observatoryContext';
 
 /** Карточка выбранного тела. Расстояния живые: считаются по орбитам на текущую дату симуляции. */
@@ -12,9 +13,12 @@ export function BodyCard() {
   const { t } = useI18n();
   const selected = useObservatoryState(s => s.selected);
   const focused = useObservatoryState(s => s.focused);
+  const eventRunning = useObservatoryState(s => s.activeEvent !== null);
   const fromSun = useRef<HTMLElement>(null);
   const fromEarth = useRef<HTMLElement>(null);
   const lightTime = useRef<HTMLElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  useOccluder(cardRef, true, selected);
 
   useFrame(frame => {
     if (frame.selectedFromSunAu !== null) writeText(fromSun.current, formatAu(t, frame.selectedFromSunAu));
@@ -31,7 +35,7 @@ export function BodyCard() {
   const hasEarthDistance = selected !== 'sun' && selected !== 'earth';
 
   return (
-    <aside className="body-card" key={selected} aria-label={t.card.label(text.name)}>
+    <aside className={`body-card ${eventRunning ? 'is-compact' : ''}`} key={selected} ref={cardRef} aria-label={t.card.label(text.name)}>
       <button type="button" className="card-close" aria-label={t.card.close} onClick={() => observatory.select(null)}>
         <X size={16} strokeWidth={1.6} />
       </button>

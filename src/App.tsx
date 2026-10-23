@@ -7,14 +7,18 @@ import { BodyRail } from './ui/BodyRail';
 import { EventBanner } from './ui/events/EventBanner';
 import { EventLauncher } from './ui/events/EventLauncher';
 import { EventsSheet } from './ui/events/EventsSheet';
+import { FirstSteps } from './ui/FirstSteps';
 import { HelpDialog } from './ui/HelpDialog';
 import { Intro } from './ui/Intro';
 import { ObservatoryContext, useFrame, useObservatory } from './ui/observatoryContext';
 import { SettingsPanel } from './ui/SettingsPanel';
 import { TimeDeck } from './ui/TimeDeck';
 import { TopBar } from './ui/TopBar';
+import { useLayoutVariable } from './ui/useLayoutVariable';
 
 type Panel = 'events' | 'settings' | 'help' | null;
+
+const heightOf = (rect: DOMRect) => rect.height;
 
 export default function App() {
   const stageRef = useRef<HTMLDivElement>(null);
@@ -91,6 +95,8 @@ function Hud() {
   const [panel, setPanel] = useState<Panel>(null);
   const [soundOn, setSoundOn] = useState(false);
   const ambience = useRef<Ambience | null>(null);
+  const bottomBarRef = useRef<HTMLElement>(null);
+  useLayoutVariable(bottomBarRef, '--bottom-bar-height', heightOf);
 
   useEffect(() => () => ambience.current?.dispose(), []);
 
@@ -111,12 +117,13 @@ function Hud() {
 
   return (
     <>
-      <KeyboardShortcuts onEscape={() => setPanel(null)} />
+      <KeyboardShortcuts panelOpen={panel !== null} onClosePanel={() => setPanel(null)} />
       <TopBar soundOn={soundOn} onToggleSound={toggleSound} onOpenSettings={() => toggle('settings')} onOpenHelp={() => toggle('help')} settingsOpen={panel === 'settings'} />
       <EventBanner />
       <BodyRail />
       <BodyCard />
-      <footer className="bottom-bar">
+      <FirstSteps />
+      <footer className="bottom-bar" ref={bottomBarRef}>
         <TimeDeck />
         <EventLauncher open={panel === 'events'} onToggle={() => toggle('events')} />
       </footer>
@@ -128,24 +135,32 @@ function Hud() {
 }
 
 /**
- * Пробел — пауза, Esc — закрыть панель. Пробел не перехватывается только в полях и переключателях,
- * где он меняет значение. На кнопках перехватывается: после щелчка по планете фокус остаётся
- * на кнопке, и пробел повторял бы перелёт вместо паузы. Кнопки по-прежнему нажимаются Enter.
+ * Пробел — пауза, Esc — закрыть панель, а если панелей нет — карточку тела. Esc, уже обработанный
+ * всплывающим списком (defaultPrevented), дальше не идёт: иначе одно нажатие закрыло бы и список, и карточку.
+ * Пробел не перехватывается только в полях и переключателях, где он меняет значение. На кнопках
+ * перехватывается: после щелчка по планете фокус остаётся на кнопке, и пробел повторял бы перелёт
+ * вместо паузы. Кнопки по-прежнему нажимаются Enter. Пока сцена не готова, пробел принадлежит
+ * заставке — он пропускает отсчёт и не должен заодно ставить симуляцию на паузу.
  */
-function KeyboardShortcuts({ onEscape }: { onEscape: () => void }) {
+function KeyboardShortcuts({ panelOpen, onClosePanel }: { panelOpen: boolean; onClosePanel: () => void }) {
   const observatory = useObservatory();
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onEscape();
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        if (panelOpen) onClosePanel();
+        else observatory.select(null);
+        return;
+      }
       const target = event.target as HTMLElement;
       const editing = target.closest('input, select, textarea');
-      if (event.code === 'Space' && !editing) {
+      if (event.code === 'Space' && !editing && observatory.store.get().ready) {
         event.preventDefault();
         observatory.setPaused(!observatory.store.get().paused);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [observatory, onEscape]);
+  }, [observatory, panelOpen, onClosePanel]);
   return null;
 }

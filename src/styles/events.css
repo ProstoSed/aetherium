@@ -1,10 +1,12 @@
 /* --- Каталог событий ---------------------------------------------------------- */
+/* Каталог стоит справа от ленты тел, а не поверх неё; в оставшейся ширине — по центру. */
 .events-sheet {
   position: absolute;
-  left: 50%;
+  left: calc(var(--rail-right, 240px) + 16px);
+  right: var(--edge);
   bottom: calc(var(--edge) + 82px);
-  transform: translateX(-50%);
-  width: min(1120px, calc(100vw - 2 * var(--edge)));
+  max-width: 1120px;
+  margin: 0 auto;
   max-height: calc(100% - var(--edge) * 2 - 82px - 80px);
   display: flex;
   flex-direction: column;
@@ -16,8 +18,8 @@
 }
 
 @keyframes sheet-in {
-  from { opacity: 0; transform: translate(-50%, 24px); }
-  to { opacity: 1; transform: translateX(-50%); }
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
 }
 
 .sheet-header {
@@ -103,6 +105,14 @@
   transform: scale(0.9);
 }
 
+/* Обёртка вкладки не прокручивается сама: прокрутка — у сетки и хроники внутри, как и без обёртки. */
+.sheet-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 .event-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -182,12 +192,15 @@
   color: var(--text-soft);
 }
 
+/* Длинные немецкие слова («Sternschnuppenregen») не помещаются в карточку целиком — переносятся по слогам. */
 .event-card-name {
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 21px;
   line-height: 1.05;
   color: var(--text);
+  hyphens: auto;
+  overflow-wrap: anywhere;
 }
 
 .event-card-text {
@@ -362,7 +375,8 @@
 
 @media (max-width: 760px) {
   .events-sheet {
-    bottom: calc(var(--edge) + 130px);
+    left: var(--edge);
+    bottom: calc(var(--edge) + var(--bottom-bar-height, 130px) + 10px);
     max-height: 60vh;
   }
   .event-grid { grid-template-columns: 1fr; }

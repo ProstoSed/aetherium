@@ -195,10 +195,13 @@
   gap: 10px;
 }
 
+/* flex: none — на широком экране переключатель не сжимается в ряду инструментов (колонки minmax(0, 1fr)
+   нужны только телефонной сетке); если ряд не помещается, раньше включаются короткие подписи. */
 .scale-toggle {
+  flex: none;
   position: relative;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   padding: 4px;
   border-radius: 999px;
   background: var(--panel);
@@ -208,8 +211,10 @@
 .scale-toggle button {
   position: relative;
   z-index: 1;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 16px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-radius: 999px;
   font-size: 12.5px;
   font-weight: 600;
@@ -249,7 +254,7 @@
 
 .language-mark {
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
 }
@@ -308,12 +313,18 @@
   box-shadow: var(--shadow-panel);
 }
 
+.tool-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .tool-button {
   position: relative;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   color: var(--text-soft);
   transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s var(--ease-out);
@@ -441,7 +452,7 @@
 }
 
 .rail-item.is-satellite {
-  min-height: 34px;
+  min-height: 40px;
   margin-left: 18px;
   grid-template-columns: 30px 1fr;
 }
@@ -579,8 +590,8 @@
   right: 12px;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   color: var(--text-soft);
   transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
@@ -813,11 +824,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Зона нажатия 36 px при тонкой дорожке: отрицательные поля не дают ей раздвинуть колонку. */
 .deck-speed input[type='range'] {
   appearance: none;
   width: 100%;
-  height: 20px;
-  margin: 0;
+  height: 36px;
+  margin: -8px 0;
   background: transparent;
   cursor: pointer;
 }
@@ -925,6 +937,7 @@
 .webgl-error strong {
   font-family: var(--font-display);
   font-size: 28px;
+  font-weight: 600;
 }
 
 /* --- Узкие экраны ---------------------------------------------------------------- */
@@ -932,7 +945,7 @@
   .deck-speed { width: 150px; }
   .deck-date { min-width: 160px; }
   .deck-date-value { font-size: 21px; }
-  .deck-now span, .deck-now { padding: 0 12px; }
+  .deck-now { padding: 0 12px; }
 }
 
 @media (max-width: 980px) {
@@ -941,6 +954,8 @@
   }
   .time-deck { grid-column: 1; justify-self: start; }
   .body-card { width: 320px; }
+  .scale-toggle-long { display: none; }
+  .scale-toggle-short { display: inline; }
 }
 
 @media (max-width: 760px) {
@@ -949,19 +964,34 @@
       linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, transparent 24%),
       linear-gradient(0deg, rgba(0, 0, 0, 0.75) 0%, transparent 30%);
   }
-  .top-bar { flex-wrap: wrap; row-gap: 10px; }
+  /* Две строки: название с языком и справкой, под ними переключатель масштаба и остальные кнопки.
+     Обёртки инструментов растворяются (display: contents), и связки встают в сетку панели сами. */
+  .top-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .top-tools, .tool-group { display: contents; }
+  .brand { grid-area: 1 / 1; justify-self: start; }
+  .tool-cluster-aux { grid-area: 1 / 2; }
+  .scale-toggle { grid-area: 2 / 1; }
+  .tool-cluster-main { grid-area: 2 / 2; }
+  .tool-cluster {
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow: var(--shadow-panel);
+  }
   .brand-tagline { display: none; }
   .brand-name { font-size: 19px; }
-  .top-tools { width: 100%; justify-content: space-between; }
-  .scale-toggle button { padding: 0 12px; font-size: 12.5px; }
+  .scale-toggle button { padding: 0 10px; font-size: 12.5px; }
   .scale-toggle-long { display: none; }
   .scale-toggle-short { display: inline; }
-  .tool-button { width: 36px; height: 36px; }
   /* На телефоне полноэкранный режим недоступен или неудобен — место нужнее. */
   .tool-fullscreen { display: none; }
 
   .body-rail {
-    top: calc(var(--edge) + 104px);
+    top: calc(var(--top-bar-bottom, 118px) + 10px);
     left: 0;
     right: 0;
     transform: none;
@@ -994,7 +1024,7 @@
 
   .body-card {
     top: auto;
-    bottom: calc(var(--edge) + 206px);
+    bottom: calc(var(--edge) + var(--bottom-bar-height, 190px) + 12px);
     left: var(--edge);
     right: var(--edge);
     width: auto;
@@ -1003,7 +1033,11 @@
   }
   .card-hero .orb { --orb-size: 60px !important; }
   .card-name { font-size: 32px; }
-  .card-facts { display: none; }
+  /* Во время события на телефоне карточка сворачивается до названия: иначе ей, баннеру и ленте
+     тел вместе не остаётся места для самого события. В остальное время факты — ниже, прокруткой. */
+  .body-card.is-compact .card-description,
+  .body-card.is-compact .card-live,
+  .body-card.is-compact .card-facts { display: none; }
 
   .bottom-bar { grid-template-columns: 1fr; gap: 10px; }
   .time-deck {
@@ -1017,4 +1051,8 @@
   .deck-speed { flex: 1; width: auto; min-width: 140px; }
   .deck-date { order: -1; flex: 1 1 100%; min-width: 0; padding: 0 4px; border: 0; }
   .deck-date-value { font-size: 21px; }
+}
+
+@media (max-width: 380px) {
+  .scale-toggle button { padding: 0 6px; font-size: 12px; }
 }
