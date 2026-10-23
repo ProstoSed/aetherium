@@ -175,11 +175,20 @@ function blurWrapped(data, width, height, radius) {
   }
 }
 
+/**
+ * PNG с фильтром Up (тип 2): каждая строка хранится как разность с предыдущей. Карта яркости
+ * гладкая, разности почти нулевые, и deflate сжимает их втрое лучше сырых значений (без потерь).
+ */
 function writeGrayPng(file, data, width, height) {
+  const values = Uint8Array.from(data, v => Math.round(Math.min(1, v) * 255));
   const raw = Buffer.alloc((width + 1) * height);
   for (let y = 0; y < height; y++) {
-    raw[y * (width + 1)] = 0;
-    for (let x = 0; x < width; x++) raw[y * (width + 1) + 1 + x] = Math.round(Math.min(1, data[y * width + x]) * 255);
+    raw[y * (width + 1)] = y === 0 ? 0 : 2;
+    for (let x = 0; x < width; x++) {
+      const value = values[y * width + x];
+      const above = y === 0 ? 0 : values[(y - 1) * width + x];
+      raw[y * (width + 1) + 1 + x] = (value - above) & 0xff;
+    }
   }
   const chunk = (type, payload) => {
     const length = Buffer.alloc(4);

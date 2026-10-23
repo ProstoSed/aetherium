@@ -1,0 +1,8 @@
+{
+  /* Конфиг сборки и проверки запускаются в Node — у них свои типы. */
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["vite.config.ts", "tests"]
+}

@@ -1,6 +1,6 @@
 // Снимки ключевых состояний и ошибки консоли — проверка без ручного клика.
 // Запуск: node tools/shoot.cjs [url] [папка] [сценарии через запятую] [язык: en|ru|de|fr|zh]
-const { chromium } = require('@playwright/test');
+const { launchChrome } = require('./chrome.cjs');
 const path = require('node:path');
 const fs = require('node:fs');
 
@@ -11,7 +11,7 @@ const language = process.argv[5] || 'en';
 fs.mkdirSync(outDir, { recursive: true });
 
 (async () => {
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const browser = await launchChrome();
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.addInitScript(code => {
     localStorage.setItem('aetherium.language', code);

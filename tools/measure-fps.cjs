@@ -3,7 +3,7 @@
 // Запуск: node tools/measure-fps.cjs [url] [секунды] [uncapped|weak]
 // weak — обычные 60 Гц и процессор, замедленный в 6 раз: так видны пропущенные кадры
 // на слабом ноутбуке, которых на мощной машине не заметно.
-const { chromium } = require('@playwright/test');
+const { launchChrome } = require('./chrome.cjs');
 
 const url = process.argv[2] || 'http://127.0.0.1:5177/';
 const seconds = Number(process.argv[3] || 8);
@@ -12,12 +12,7 @@ const CPU_SLOWDOWN = 6;
 const JANK_MS = 20;
 
 (async () => {
-  const browser = await chromium.launch({
-    channel: 'chrome',
-    headless: true,
-    args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist',
-      ...(mode === 'uncapped' ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : [])],
-  });
+  const browser = await launchChrome(mode === 'uncapped' ? ['--disable-gpu-vsync', '--disable-frame-rate-limit'] : []);
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));

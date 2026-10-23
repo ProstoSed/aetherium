@@ -123,20 +123,27 @@ per frame and shaders compile in parallel, so the main thread stays free while t
 
 ## Checks
 
-Every push and pull request runs type checking, the orbit tests and the build on GitHub Actions;
-the built `index.html` is attached to each run.
+Every push and pull request runs a dependency audit, type checking, the orbit tests, the build and
+the end-to-end browser test on GitHub Actions. The runner has no GPU, so the browser test renders
+through SwiftShader and opens the built `index.html` itself; that file is attached to each run.
 
 ```bash
 npm run typecheck
 npm test                      # orbits and Earth's rotation against observed dates
 npm run test:e2e              # end-to-end browser test incl. all languages (needs npm run dev)
+node tests/observatory.cjs file:///path/to/dist/index.html   # the same test against the built file
 node tools/check-earth-time.cjs   # Earth seen from the Sun at known UTC moments
 node tools/measure-fps.cjs http://127.0.0.1:5177/ 8 weak
 node tools/measure-startup.cjs http://127.0.0.1:5178/
+node tools/profile-cpu.cjs http://127.0.0.1:5177/ 4 1      # where main-thread time goes
 node tools/shoot.cjs http://127.0.0.1:5177/ tools/shots earth,events en   # screenshots
 npm run sky                   # rebuild the sky catalogue from d3-celestial
 node tools/build-earth.cjs    # rebuild Earth maps from NASA originals (links inside)
+npm run notices               # rebuild THIRD_PARTY_NOTICES.md after dependency updates
 ```
+
+Browser scripts start the system Chrome through `tools/chrome.cjs`: on Windows with the GPU via
+Direct3D 11, on Linux with SwiftShader. `AETHERIUM_GL=gpu` or `AETHERIUM_GL=software` overrides it.
 
 ## Data and credits
 
@@ -154,3 +161,8 @@ node tools/build-earth.cjs    # rebuild Earth maps from NASA originals (links in
   (GEBCO) produced by the British Oceanographic Data Centre; Earth at Night (Black Marble 2016),
   NASA Earth Observatory. Source links are listed in `tools/build-earth.cjs`.
 - 3D simplex noise: Ashima Arts and Stefan Gustavson (MIT).
+- Typefaces: Manrope and Cormorant Garamond (SIL Open Font License 1.1).
+
+Licences of everything embedded in the built file — three.js, React, Lucide, the typefaces,
+d3-celestial data — are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the build
+also places them in a comment at the top of `index.html`.

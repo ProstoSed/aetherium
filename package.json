@@ -3,13 +3,17 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "start": "vite build && vite preview --host 127.0.0.1 --port 5178 --open",
     "sky": "node tools/build-sky.mjs",
-    "typecheck": "tsc --noEmit",
+    "notices": "node tools/build-notices.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
     "test": "node tools/run-ts.mjs tests/physics.check.ts",
     "test:e2e": "node tests/observatory.cjs"
   },
@@ -26,11 +30,11 @@
     "@types/node": "22.19.17",
     "@types/react": "19.2.7",
     "@types/react-dom": "19.2.3",
-    "@types/three": "^0.185.4",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "5.1.1",
     "d3-celestial": "^0.7.35",
     "typescript": "5.9.3",
-    "vite": "7.3.2",
+    "vite": "7.3.7",
     "vite-plugin-singlefile": "2.3.0"
   }
 }

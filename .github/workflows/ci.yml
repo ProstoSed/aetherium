@@ -14,19 +14,23 @@ concurrency:
 
 jobs:
   check:
-    name: Type check, test, build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Type check, test, build, browser test
+    # A fixed image rather than ubuntu-latest: the latest label moves to a new Ubuntu on its own schedule.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
 
       - name: Type check
         run: npm run typecheck
@@ -37,9 +41,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The runner image ships Google Chrome; with no GPU the scene renders through SwiftShader
+      # (tools/chrome.cjs). The test opens the built file itself, the same one people download.
+      - name: Browser test
+        run: node tests/observatory.cjs "file://$PWD/dist/index.html"
+
       # The build is a single self-contained HTML file: downloadable from the run page and opens from disk.
       - name: Upload build
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: aetherium
           path: dist/index.html

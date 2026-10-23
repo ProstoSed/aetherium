@@ -1,11 +1,11 @@
 // Замер старта: сколько главный поток занят длинными задачами до первого кадра сцены.
 // Запуск: node tools/measure-startup.cjs [url]
-const { chromium } = require('@playwright/test');
+const { launchChrome } = require('./chrome.cjs');
 
 const url = process.argv[2] || 'http://127.0.0.1:5177/';
 
 (async () => {
-  const browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const browser = await launchChrome();
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.addInitScript(() => {
     window.__longTasks = [];

@@ -1,6 +1,6 @@
 // Где процессор тратит время кадра: суммарное собственное время функций за несколько секунд.
 // Запуск: node tools/profile-cpu.cjs [url] [секунды] [замедление процессора]
-const { chromium } = require('@playwright/test');
+const { launchChrome } = require('./chrome.cjs');
 
 const url = process.argv[2] || 'http://127.0.0.1:5177/';
 const seconds = Number(process.argv[3] || 4);
@@ -8,8 +8,7 @@ const slowdown = Number(process.argv[4] || 1);
 const TOP = 25;
 
 (async () => {
-  const browser = await chromium.launch({ channel: 'chrome', headless: true,
-    args: ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist'] });
+  const browser = await launchChrome();
   const page = await browser.newPage({ viewport: { width: 1600, height: 900 } });
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForTimeout(3000);
