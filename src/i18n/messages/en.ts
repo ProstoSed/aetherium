@@ -70,7 +70,7 @@ export const en = {
     /** Абзацы справки: жирный зачин и продолжение. */
     notes: [
       [
-        { strong: 'The orbits are real.', text: ' Planet positions come from JPL Keplerian elements for the chosen date: ellipses, inclinations, precession of perihelia. Accuracy is a fraction of a degree in 1800–2050; beyond that the elements are extrapolated.' },
+        { strong: 'The orbits are real.', text: ' Planet positions come from JPL Keplerian elements for the chosen date: ellipses, inclinations, precession of perihelia. Accuracy is a fraction of a degree from 1800 to 2050 and within a degree from 3000 BC to AD 3000; beyond that the elements are extrapolated.' },
       ],
       [
         { strong: 'Illustrative scale', text: ' compresses distances and sizes so the whole system fits in the frame.' },
@@ -93,7 +93,7 @@ export const en = {
     pauseHint: 'Pause (Space)',
     speed: 'Speed',
     speedLabel: 'Time speed',
-    extrapolated: (from: number, to: number) => `outside ${from}–${to}: orbits extrapolated`,
+    extrapolated: (from: string, to: string) => `outside ${from} – ${to}: orbits extrapolated`,
     now: 'Now',
     nowHint: 'Back to today',
   },
@@ -111,6 +111,8 @@ export const en = {
 
   /** Дата: «день и месяц» уже отформатированы Intl, год — число, у дат до н. э. ≤ 0. */
   date: (dayMonth: string, year: number) => (year > 0 ? `${dayMonth} ${year}` : `${dayMonth} ${1 - year} BC`),
+  /** Год отдельно; в астрономическом счёте 0 — это 1 год до н. э. */
+  year: (year: number) => (year > 0 ? `AD ${year}` : `${1 - year} BC`),
 
   units: {
     au: (value: string) => `${value} AU`,

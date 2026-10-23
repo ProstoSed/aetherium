@@ -60,7 +60,7 @@ export function TimeDeck() {
       <div className="deck-date">
         <span className="deck-date-value" ref={dateRef} />
         <span className="deck-date-note" ref={accuracyRef} hidden>
-          {t.time.extrapolated(ELEMENTS_VALID_FROM_YEAR, ELEMENTS_VALID_TO_YEAR)}
+          {t.time.extrapolated(t.year(ELEMENTS_VALID_FROM_YEAR), t.year(ELEMENTS_VALID_TO_YEAR))}
         </span>
       </div>
 

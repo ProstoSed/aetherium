@@ -61,7 +61,7 @@ export const zh: Messages = {
     ],
     notes: [
       [
-        { strong: '轨道是真实的。', text: '行星位置依据 JPL 的开普勒轨道根数按所选日期计算：椭圆、倾角、近日点进动。1800–2050 年间误差不到一度，超出这一范围则为外推。' },
+        { strong: '轨道是真实的。', text: '行星位置依据 JPL 的开普勒轨道根数按所选日期计算：椭圆、倾角、近日点进动。1800–2050 年间误差仅为零点几度，公元前 3000 年至公元 3000 年间不到一度，超出这一范围则为外推。' },
       ],
       [
         { strong: '示意比例', text: '压缩距离和大小，让整个太阳系装进画面。' },
@@ -84,7 +84,7 @@ export const zh: Messages = {
     pauseHint: '暂停（空格）',
     speed: '速度',
     speedLabel: '时间速度',
-    extrapolated: (from, to) => `${from}–${to} 年以外：轨道为外推`,
+    extrapolated: (from, to) => `${from}至${to}以外：轨道为外推`,
     now: '现在',
     nowHint: '回到今天',
   },
@@ -101,6 +101,7 @@ export const zh: Messages = {
   },
 
   date: (dayMonth, year) => (year > 0 ? `${year}年${dayMonth}` : `公元前${1 - year}年${dayMonth}`),
+  year: year => (year > 0 ? `公元${year}年` : `公元前${1 - year}年`),
 
   units: {
     au: value => `${value} 天文单位`,

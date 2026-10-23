@@ -41,17 +41,28 @@ acceleration.
 
 ## What is modelled faithfully
 
-- **Orbits.** JPL Keplerian elements (Standish, table 1) with secular rates: ellipses,
-  inclinations, precession of perihelia and nodes. Orbit lines are rebuilt as time passes, so at
-  high speed you can watch them slowly turn. Checked against observed dates: oppositions of Mars
+- **Orbits.** JPL Keplerian elements (Standish) with secular rates: ellipses, inclinations,
+  precession of perihelia and nodes. Table 1 is used for 1800–2050, tables 2a and 2b (with the
+  extra terms for Jupiter–Neptune) further out, blended over 50 years at the seams. Orbit lines are
+  rebuilt as time passes, so at high speed you can watch them slowly turn. Oppositions of Mars
   (2025-01-16), Jupiter (2026-01-10), Saturn (2025-09-21) and Venus's inferior conjunction match
-  within 0.2°. Outside 1800–2050 the elements are extrapolated and the interface says so.
+  within 0.2°; against JPL's DE441 ephemeris Earth, Jupiter and Saturn stay within 0.3° from
+  2901 BC to AD 2900. Beyond 3000 BC – AD 3000 the elements are extrapolated and the interface
+  says so. Positions use Terrestrial Time; the date shown is civil time, converted with ΔT
+  (Espenak & Meeus), which reaches about 20 hours by 3000 BC.
 - **Earth** is drawn from NASA imagery: Blue Marble colour, GEBCO relief and Black Marble city
   lights. The globe is oriented by IAU rotation elements, so day, night and city lights match the
   real time of day: at the March 2026 equinox at 12:00 UTC the subsolar point falls in the Gulf of
   Guinea, at 00:00 UTC in the Pacific (`tools/check-earth-time.cjs`). Oceans are found from the
   imagery itself and cover 70.6% of the map against the real 71%.
-- **The Moon** follows Schlyter's elements with nodal regression (18.6 years) and apsidal precession.
+- **The Moon** follows Schlyter's elements with nodal regression (18.6 years) and apsidal
+  precession, referred to the J2000 equinox like the planets, with the twelve largest solar
+  perturbations (evection, variation, annual equation…) and Meeus's quadratic secular terms.
+  At the total lunar eclipse of 2025-09-07 it is 0.04° from DE441; it keeps its near side to Earth
+  within the libration of ±8°.
+- **Earth's axis precesses** (a circle every ~25 800 years) and its tilt follows Laskar's
+  obliquity, so seasons stay where they belong in any millennium; rotation follows the IERS Earth
+  rotation angle, so noon UTC stays over Greenwich.
 - **Rotation axes** use IAU pole positions and rotation rates (Archinal et al. 2018): Uranus lies
   on its side, Venus spins backwards.
 - **Rings** follow real radial profiles: Saturn's D, C and B rings, the Cassini Division, the A ring
@@ -129,7 +140,7 @@ through SwiftShader and opens the built `index.html` itself; that file is attach
 
 ```bash
 npm run typecheck
-npm test                      # orbits and Earth's rotation against observed dates
+npm test                      # orbits against observed dates and DE441; engine logic
 npm run test:e2e              # end-to-end browser test incl. all languages (needs npm run dev)
 node tests/observatory.cjs file:///path/to/dist/index.html   # the same test against the built file
 node tools/check-earth-time.cjs   # Earth seen from the Sun at known UTC moments
@@ -148,7 +159,9 @@ Direct3D 11, on Linux with SwiftShader. `AETHERIUM_GL=gpu` or `AETHERIUM_GL=soft
 ## Data and credits
 
 - Planetary orbital elements: E. M. Standish, JPL Solar System Dynamics.
-- Lunar orbit: P. Schlyter, *How to compute planetary positions*.
+- Lunar orbit: P. Schlyter, *How to compute planetary positions*; quadratic terms and obliquity:
+  J. Meeus, *Astronomical Algorithms*; ΔT: F. Espenak and J. Meeus, *Five Millennium Canon of
+  Solar Eclipses*; reference positions for the tests: JPL Horizons (DE441).
 - Rotation elements: Archinal et al. (2018), IAU Working Group on Cartographic Coordinates and
   Rotational Elements.
 - Stars, constellations, Milky Way outlines and deep-sky objects come from the data files of

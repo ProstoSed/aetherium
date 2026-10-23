@@ -63,7 +63,7 @@ export const de: Messages = {
     ],
     notes: [
       [
-        { strong: 'Die Bahnen sind echt.', text: ' Die Positionen der Planeten werden aus den Kepler-Elementen des JPL für das gewählte Datum berechnet: Ellipsen, Neigungen, Präzession der Perihele. Zwischen 1800 und 2050 liegt die Genauigkeit bei Bruchteilen eines Grades, außerhalb wird extrapoliert.' },
+        { strong: 'Die Bahnen sind echt.', text: ' Die Positionen der Planeten werden aus den Kepler-Elementen des JPL für das gewählte Datum berechnet: Ellipsen, Neigungen, Präzession der Perihele. Zwischen 1800 und 2050 liegt die Genauigkeit bei Bruchteilen eines Grades, von 3000 v. Chr. bis 3000 n. Chr. innerhalb eines Grades, außerhalb wird extrapoliert.' },
       ],
       [
         { strong: 'Der anschauliche Maßstab', text: ' staucht Entfernungen und Größen, damit das ganze System ins Bild passt.' },
@@ -86,7 +86,7 @@ export const de: Messages = {
     pauseHint: 'Pause (Leertaste)',
     speed: 'Tempo',
     speedLabel: 'Zeittempo',
-    extrapolated: (from, to) => `außerhalb ${from}–${to}: Bahnen extrapoliert`,
+    extrapolated: (from, to) => `außerhalb ${from} – ${to}: Bahnen extrapoliert`,
     now: 'Jetzt',
     nowHint: 'Zurück zum heutigen Tag',
   },
@@ -103,6 +103,7 @@ export const de: Messages = {
   },
 
   date: (dayMonth, year) => (year > 0 ? `${dayMonth} ${year}` : `${dayMonth} ${1 - year} v. Chr.`),
+  year: year => (year > 0 ? `${year} n. Chr.` : `${1 - year} v. Chr.`),
 
   units: {
     au: value => `${value} AE`,

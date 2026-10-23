@@ -66,7 +66,7 @@ export const fr: Messages = {
     ],
     notes: [
       [
-        { strong: 'Les orbites sont réelles.', text: ` Les positions des planètes sont calculées à partir des éléments képlériens du JPL pour la date choisie${COLON} ellipses, inclinaisons, précession des périhélies. La précision est d’une fraction de degré entre 1800 et 2050${' '}; au-delà, les éléments sont extrapolés.` },
+        { strong: 'Les orbites sont réelles.', text: ` Les positions des planètes sont calculées à partir des éléments képlériens du JPL pour la date choisie${COLON} ellipses, inclinaisons, précession des périhélies. La précision est d’une fraction de degré entre 1800 et 2050 et d’un degré au plus de 3000 av. J.-C. à 3000 apr. J.-C.${' '}; au-delà, les éléments sont extrapolés.` },
       ],
       [
         { strong: 'L’échelle illustrative', text: ' comprime les distances et les tailles pour que tout le système tienne dans le cadre.' },
@@ -89,7 +89,7 @@ export const fr: Messages = {
     pauseHint: 'Pause (Espace)',
     speed: 'Vitesse',
     speedLabel: 'Vitesse du temps',
-    extrapolated: (from, to) => `hors ${from}–${to}${COLON} orbites extrapolées`,
+    extrapolated: (from, to) => `hors ${from} – ${to}${COLON} orbites extrapolées`,
     now: 'Maintenant',
     nowHint: 'Revenir à aujourd’hui',
   },
@@ -106,6 +106,7 @@ export const fr: Messages = {
   },
 
   date: (dayMonth, year) => (year > 0 ? `${dayMonth} ${year}` : `${dayMonth} ${1 - year} av. J.-C.`),
+  year: year => (year > 0 ? `${year} apr. J.-C.` : `${1 - year} av. J.-C.`),
 
   units: {
     au: value => `${value} UA`,

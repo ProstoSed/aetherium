@@ -19,7 +19,10 @@ const MOMENTS = [
   fs.mkdirSync('tools/shots', { recursive: true });
   const browser = await launchChrome();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
-  await page.addInitScript(() => localStorage.setItem('aetherium.language', 'en'));
+  await page.addInitScript(() => {
+    localStorage.setItem('aetherium.language', 'en');
+    localStorage.setItem('aetherium.first-steps-seen', '1');
+  });
   await page.addInitScript(() => sessionStorage.setItem('aetherium.intro-seen', '1'));
   await page.goto(url, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.observatory && window.observatory.store.get().ready, null, { timeout: 120000 });

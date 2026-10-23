@@ -93,8 +93,15 @@ async function brightness(page, clip) {
   const trueScale = page.locator('.scale-toggle [role="radio"]').nth(1);
   await trueScale.click();
   await check('true scale switched on', async () => (await trueScale.getAttribute('aria-checked')) === 'true');
-  await page.locator('.scale-toggle [role="radio"]').nth(0).click();
-  await check('illustrative scale back on', async () => (await trueScale.getAttribute('aria-checked')) === 'false');
+  // Запуск события из истинного масштаба на паузе: кадр сменяется на наглядный, событие идёт, время идёт.
+  await page.keyboard.press('Space');
+  await check('paused in true scale', async () => await count('.deck-play .lucide-play') === 1);
+  await page.locator('.event-launcher').click();
+  await page.locator('.event-card.event-comet').click();
+  await check('event started from true scale switches to illustrative', async () => (await trueScale.getAttribute('aria-checked')) === 'false');
+  await check('event from true scale runs and time is unpaused', async () => await count('.event-banner') === 1 && await count('.deck-play .lucide-pause') === 1);
+  await page.locator('.banner-stop').click();
+  await check('event stopped again', async () => await count('.event-banner') === 0);
 
   await page.locator('.tool-settings').click();
   const orbitsSwitch = page.locator('.setting-row input').first();

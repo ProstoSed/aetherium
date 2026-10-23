@@ -14,6 +14,8 @@ import { createGlowTexture } from './textures';
  * 30 оборотов в секунду, и глаз видел бы стробоскоп вместо планеты.
  */
 const MAX_VISIBLE_SPIN_DEGREES_PER_SECOND = 120;
+/** За месяц ось Земли уходит на 4″ — меньше пикселя при любом приближении. */
+const EARTH_AXIS_REBUILD_DAYS = 30;
 const SPHERE_SEGMENTS = { width: 128, height: 96 };
 const SUN_GLOW_SIZE_IN_RADII = 5.5;
 /** Минимальный видимый размер свечения Солнца, доля высоты кадра: из-за Нептуна Солнце — просто яркая звезда. */
@@ -29,9 +31,9 @@ const ATMOSPHERE_SHELLS: Partial<Record<BodyId, { color: number; thickness: numb
  * меридиан. Поворот поверхности на W вокруг Y тогда ставит нулевой меридиан туда, где он есть
  * на самом деле, — у Земли в 12:00 UTC Солнце стоит над Гринвичем.
  */
-function axisOrientation(id: BodyId): THREE.Quaternion {
-  const poleVector = poleDirection(id);
-  const originVector = meridianOriginDirection(id);
+function axisOrientation(id: BodyId, julianDate: number): THREE.Quaternion {
+  const poleVector = poleDirection(id, julianDate);
+  const originVector = meridianOriginDirection(id, julianDate);
   const y = new THREE.Vector3(poleVector.x, poleVector.y, poleVector.z);
   const x = new THREE.Vector3(originVector.x, originVector.y, originVector.z).addScaledVector(y, -new THREE.Vector3(originVector.x, originVector.y, originVector.z).dot(y)).normalize();
   const z = new THREE.Vector3().crossVectors(x, y);
@@ -66,6 +68,7 @@ export class BodyViews {
   private readonly atmospheres: { mesh: THREE.Mesh; material: THREE.ShaderMaterial }[] = [];
   private readonly sunWorld = new THREE.Vector3();
   private readonly bodyWorld = new THREE.Vector3();
+  private earthAxisBuiltAt = Number.NaN;
 
   constructor(initialJulianDate: number, baker: SurfaceBaker) {
     BODIES.forEach((info, index) => {
@@ -127,7 +130,7 @@ export class BodyViews {
     const root = new THREE.Group();
     root.name = info.id;
     const axis = new THREE.Group();
-    axis.quaternion.copy(axisOrientation(info.id));
+    axis.quaternion.copy(axisOrientation(info.id, julianDate));
     root.add(axis);
 
     const ringProfile = RING_PROFILES[info.id];
@@ -217,6 +220,11 @@ export class BodyViews {
 
   /** Поворот поверхностей по реальному углу меридиана с ограничением видимой скорости. */
   updateRotation(julianDate: number, daysAdvanced: number, realSeconds: number) {
+    // Ось Земли прецессирует (круг за ~25 800 лет): её ориентация пересчитывается, когда набежит заметный сдвиг.
+    if (!(Math.abs(julianDate - this.earthAxisBuiltAt) < EARTH_AXIS_REBUILD_DAYS)) {
+      this.views.get('earth')!.axis.quaternion.copy(axisOrientation('earth', julianDate));
+      this.earthAxisBuiltAt = julianDate;
+    }
     const maxStep = THREE.MathUtils.degToRad(MAX_VISIBLE_SPIN_DEGREES_PER_SECOND) * realSeconds;
     for (const view of this.views.values()) {
       const exact = meridianAngle(view.info.id, julianDate);

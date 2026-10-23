@@ -10,6 +10,7 @@ import { FilmPeaks, emptyPeakState } from '../lens/filmPeaks';
 import { LensDirector, type FilmIntensity } from '../lens/LensDirector';
 import { LensPass } from '../lens/LensPass';
 import { heliocentricPosition, length, moonGeocentricKm, type Vec3 } from '../physics/kepler';
+import { terrestrialTime } from '../physics/time';
 import { KM_PER_AU, auFromSceneDistance, heliocentricToScene, moonOffsetToScene, overviewDistance, type ScaleMode } from '../physics/scale';
 import { createAsteroidBelt } from '../scene/AsteroidBelt';
 import { BodyViews } from '../scene/BodyViews';
@@ -139,6 +140,8 @@ export class Observatory {
   private readonly frame: FrameInfo;
   private sunBrightness = 1;
   private eventView: { focus: BodyId | null; distance: number } | null = null;
+  private pendingEventId: EventId | null = null;
+  private pendingScaleMode: ScaleMode | null = null;
   private historyKey = 0;
   private readonly stopListeningLanguage: () => void;
   private animationFrame = 0;
@@ -253,12 +256,18 @@ export class Observatory {
   }
 
   setScaleMode(mode: ScaleMode) {
-    if (mode === this.store.get().scaleMode) return;
+    // Смена применяется с задержкой: повторный запрос того же масштаба за это время ничего не добавляет.
+    if (mode === (this.pendingScaleMode ?? this.store.get().scaleMode)) return;
     if (mode === 'true' && this.events.activeId) this.events.stop();
     const now = performance.now() / 1000;
     this.peaks.triggerReelChange(now);
+    this.pendingScaleMode = mode;
     // Сама подмена — в момент, когда кадр закрыт засветкой: переход без видимого рывка.
-    this.schedule(now + SCALE_CHANGE_COVER_DELAY, () => this.applyScaleModeKeepingView(mode));
+    this.schedule(now + SCALE_CHANGE_COVER_DELAY, () => {
+      if (this.pendingScaleMode !== mode) return;
+      this.pendingScaleMode = null;
+      if (mode !== this.store.get().scaleMode) this.applyScaleModeKeepingView(mode);
+    });
   }
 
   setSpeed(speedId: SpeedId) {
@@ -282,13 +291,23 @@ export class Observatory {
     this.clock.resetToNow();
   }
 
+  /**
+   * В истинном масштабе события невидимы: планеты меньше пикселя. Сначала — смена кадра, затем
+   * тот же запуск заново: он снова проверит масштаб (его могли вернуть за эти доли секунды) и снимет
+   * паузу. Ждёт только один запуск — повторный щелчок заменяет его, а не ставит второй в очередь.
+   */
   startEvent(id: EventId) {
     if (this.store.get().scaleMode === 'true') {
-      // В истинном масштабе события невидимы: планеты меньше пикселя. Сначала — смена кадра.
+      this.pendingEventId = id;
       this.setScaleMode('cinematic');
-      this.schedule(performance.now() / 1000 + EVENT_START_AFTER_SCALE_CHANGE, () => this.events.start(id));
+      this.schedule(performance.now() / 1000 + EVENT_START_AFTER_SCALE_CHANGE, () => {
+        const pending = this.pendingEventId;
+        this.pendingEventId = null;
+        if (pending && this.store.get().scaleMode === 'cinematic') this.startEvent(pending);
+      });
       return;
     }
+    this.pendingEventId = null;
     if (this.clock.paused) this.setPaused(false);
     this.events.start(id);
   }
@@ -336,10 +355,12 @@ export class Observatory {
     const realSeconds = Math.min(0.1, this.lastTimestamp ? (timestamp - this.lastTimestamp) / 1000 : 1 / 60);
     this.lastTimestamp = timestamp;
     const now = timestamp / 1000;
-    const state = this.store.get();
 
+    // Сначала отложенные действия (смена масштаба за засветкой), потом снимок состояния: иначе
+    // кадр смены считал бы положения в старом масштабе, а радиусы и камера были бы уже в новом.
     this.runPending(now);
-    if (!this.store.get().ready) {
+    const state = this.store.get();
+    if (!state.ready) {
       this.advanceLoading();
       return;
     }
@@ -354,7 +375,7 @@ export class Observatory {
     const eventLens = this.events.update();
 
     this.bodies.updateRotation(this.clock.julianDate, daysAdvanced, realSeconds);
-    this.orbits.update(this.clock.julianDate, state.scaleMode, state.selected);
+    this.orbits.update(terrestrialTime(this.clock.julianDate), state.scaleMode, state.selected);
     this.orbits.group.visible = state.showOrbits;
     this.orbits.moonLine.line.visible = state.showOrbits;
     this.orbits.moonLine.line.position.copy(this.bodies.views.get('earth')!.root.position);
@@ -424,8 +445,9 @@ export class Observatory {
     });
   }
 
+  /** Положения — в земном времени TT, а вращение Земли и дата в интерфейсе — в гражданском UT (см. deltaTSeconds). */
   private updateBodyPositions(mode: ScaleMode) {
-    const jd = this.clock.julianDate;
+    const jd = terrestrialTime(this.clock.julianDate);
     for (const id of PLANET_IDS) {
       const au = heliocentricPosition(id, jd);
       this.heliocentric.set(id, au);
@@ -437,7 +459,7 @@ export class Observatory {
   }
 
   private updateMoon(mode: ScaleMode) {
-    const offset = moonOffsetToScene(moonGeocentricKm(this.clock.julianDate), mode, this.scratch.scene);
+    const offset = moonOffsetToScene(moonGeocentricKm(terrestrialTime(this.clock.julianDate)), mode, this.scratch.scene);
     this.bodies.views.get('moon')!.root.position.copy(this.bodies.views.get('earth')!.root.position).add(offset);
   }
 
@@ -452,9 +474,8 @@ export class Observatory {
     frame.selectedFromSunAu = null;
     frame.selectedFromEarthKm = null;
     if (state.selected && state.selected !== 'sun') {
-      const jd = this.clock.julianDate;
       const earthAu = this.heliocentric.get('earth')!;
-      const moonKm = moonGeocentricKm(jd);
+      const moonKm = moonGeocentricKm(terrestrialTime(this.clock.julianDate));
       const selectedAu = state.selected === 'moon'
         ? { x: earthAu.x + moonKm.x / KM_PER_AU, y: earthAu.y + moonKm.y / KM_PER_AU, z: earthAu.z + moonKm.z / KM_PER_AU }
         : this.heliocentric.get(state.selected)!;
