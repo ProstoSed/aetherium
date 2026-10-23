@@ -179,3 +179,8 @@ Direct3D 11, on Linux with SwiftShader. `AETHERIUM_GL=gpu` or `AETHERIUM_GL=soft
 Licences of everything embedded in the built file — three.js, React, Lucide, the typefaces,
 d3-celestial data — are collected in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md); the build
 also places them in a comment at the top of `index.html`.
+
+## License
+
+Aetherium's own code is released under the [MIT License](LICENSE). Third-party components keep
+their own licences, listed above.
