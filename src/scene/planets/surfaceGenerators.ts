@@ -1,7 +1,7 @@
 import type { BodyId } from '../../data/bodies';
-import earthColorUrl from '../../assets/earth/color.jpg';
-import earthElevationUrl from '../../assets/earth/elevation.jpg';
-import earthNightUrl from '../../assets/earth/night.jpg';
+import earthColorUrl from '../../assets/earth/color.webp';
+import earthElevationUrl from '../../assets/earth/elevation.webp';
+import earthNightUrl from '../../assets/earth/night.webp';
 
 /**
  * Генераторы поверхностей в GLSL. Каждый получает точку p на единичной сфере и возвращает

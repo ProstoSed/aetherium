@@ -11,16 +11,19 @@
 //
 // Картинки уменьшаются и пережимаются настоящим Chrome через canvas: сборка остаётся одним
 // файлом, а отдельная библиотека обработки изображений не нужна.
-const { chromium } = require('@playwright/test');
+// Формат — WebP: при той же точности против уменьшенного оригинала (PSNR) он втрое-полтора меньше
+// JPEG. Качество подобрано так, чтобы PSNR был не ниже прежнего JPEG, а наибольшая ошибка — меньше:
+// цвет q0,86 — 40,2 дБ (JPEG q0,88 — 40,1), рельеф q0,93 — 50,9 дБ (50,7), ночь q0,80 — 40,1 дБ (40,1).
+const { launchChrome } = require('./chrome.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 
 const SOURCES = 'tools/sources/nasa';
 const OUT = 'src/assets/earth';
 const MAPS = [
-  { source: 'world.topo.bathy.200407.3x5400x2700.jpg', out: 'color.jpg', width: 4096, height: 2048, quality: 0.88 },
-  { source: 'gebco_08_rev_elev_5400x2700.jpg', out: 'elevation.jpg', width: 2048, height: 1024, quality: 0.92 },
-  { source: 'BlackMarble_2016_01deg.jpg', out: 'night.jpg', width: 2048, height: 1024, quality: 0.86 },
+  { source: 'world.topo.bathy.200407.3x5400x2700.jpg', out: 'color.webp', width: 4096, height: 2048, quality: 0.86 },
+  { source: 'gebco_08_rev_elev_5400x2700.jpg', out: 'elevation.webp', width: 2048, height: 1024, quality: 0.93 },
+  { source: 'BlackMarble_2016_01deg.jpg', out: 'night.webp', width: 2048, height: 1024, quality: 0.8 },
 ];
 /** Точки для проверки кодировки карт: долгота, широта. */
 const PROBES = { 'Гвинейский залив (океан)': [0, 0], 'Эверест': [86.9, 27.9], 'Сахара': [10, 23], 'Нидерланды': [5, 52.3], 'Токио ночью': [139.7, 35.7], 'Тихий океан': [-150, 0] };
@@ -33,7 +36,7 @@ const PROBES = { 'Гвинейский залив (океан)': [0, 0], 'Эве
     }
   }
   fs.mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  const browser = await launchChrome();
   const page = await browser.newPage();
   await page.goto('about:blank');
 
@@ -56,7 +59,7 @@ const PROBES = { 'Гвинейский залив (океан)': [0, 0], 'Эве
         const y = Math.floor(((90 - lat) / 180) * map.height);
         samples[name] = Array.from(context.getImageData(x, y, 1, 1).data.slice(0, 3));
       }
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', map.quality));
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', map.quality));
       const bytes = new Uint8Array(await blob.arrayBuffer());
       let binary = '';
       for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
