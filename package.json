@@ -14,7 +14,7 @@
     "sky": "node tools/build-sky.mjs",
     "notices": "node tools/build-notices.mjs",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
-    "test": "node tools/run-ts.mjs tests/physics.check.ts",
+    "test": "node tools/run-ts.mjs tests/physics.check.ts && node tools/run-ts.mjs tests/engine.check.ts",
     "test:e2e": "node tests/observatory.cjs"
   },
   "dependencies": {

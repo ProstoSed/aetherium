@@ -122,7 +122,7 @@ const FRAGMENT = `
 export class FilmOverlay {
   readonly canvas = document.createElement('canvas');
   private readonly gl: WebGLRenderingContext | null;
-  private readonly program: WebGLProgram | null = null;
+  private program: WebGLProgram | null = null;
   private readonly uniforms: Record<string, WebGLUniformLocation | null> = {};
   private visible = false;
   private hudStyled = false;
@@ -132,7 +132,19 @@ export class FilmOverlay {
     this.canvas.setAttribute('aria-hidden', 'true');
     this.gl = this.canvas.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false });
     if (!this.gl) return;
+    // У слоя свой контекст, и после его потери программа и буфер пропадают: без preventDefault
+    // контекст не вернётся, а после возвращения их нужно собрать заново.
+    this.canvas.addEventListener('webglcontextlost', event => {
+      event.preventDefault();
+      this.program = null;
+    });
+    this.canvas.addEventListener('webglcontextrestored', () => this.setup());
+    this.setup();
+  }
+
+  private setup() {
     const gl = this.gl;
+    if (!gl) return;
     const compile = (type: number, source: string) => {
       const shader = gl.createShader(type)!;
       gl.shaderSource(shader, source);

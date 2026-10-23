@@ -25,6 +25,23 @@ async function check(name, condition, timeoutMs = CHECK_TIMEOUT_MS) {
 
 const CYRILLIC_OR_CJK = /[Ѐ-ӿ一-鿿]/;
 
+/** Средняя яркость участка экрана, 0…255: снимок разбирается тут же, в странице, через 2D-холст. */
+async function brightness(page, clip) {
+  const png = (await page.screenshot({ clip })).toString('base64');
+  return page.evaluate(async b64 => {
+    const image = new Image();
+    image.src = `data:image/png;base64,${b64}`;
+    await image.decode();
+    const canvas = Object.assign(document.createElement('canvas'), { width: image.width, height: image.height });
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let sum = 0;
+    for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+    return sum / (data.length / 4);
+  }, png);
+}
+
 (async () => {
   const browser = await launchChrome();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -125,6 +142,21 @@ const CYRILLIC_OR_CJK = /[Ѐ-ӿ一-鿿]/;
   await page.waitForSelector('.intro', { state: 'detached', timeout: SCENE_READY_TIMEOUT_MS });
   await check('language choice persists', async () => (await page.evaluate(() => document.documentElement.lang)) === 'ru-RU');
   await chooseLanguage('en');
+
+  // Потеря контекста WebGL (сброс драйвера, сон ноутбука): поверхности планет жили только
+  // в видеопамяти и должны запечься заново, а не остаться чёрными дисками.
+  await page.locator('.rail-item[data-body="jupiter"]').click();
+  await page.waitForTimeout(4500);
+  const disk = { x: 640, y: 370, width: 120, height: 120 };
+  const litBefore = await brightness(page, disk);
+  await page.evaluate(() => {
+    window.__loseContext = document.querySelector('.stage canvas').getContext('webgl2').getExtension('WEBGL_lose_context');
+    window.__loseContext.loseContext();
+  });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__loseContext.restoreContext());
+  await page.waitForFunction(() => document.querySelector('.stage').dataset.sceneReady === 'true', null, { timeout: SCENE_READY_TIMEOUT_MS });
+  await check('planets are drawn again after the WebGL context is restored', async () => await brightness(page, disk) > litBefore * 0.7);
 
   await page.setViewportSize({ width: 360, height: 740 });
   await check('no horizontal scroll on a phone', async () => !(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)));

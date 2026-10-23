@@ -89,7 +89,9 @@ export class BodyViews {
     markerGeometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(BODIES.flatMap(b => new THREE.Color(b.color).toArray())), 3));
     markerGeometry.setAttribute('visibility', new THREE.BufferAttribute(new Float32Array(BODIES.length), 1));
     this.markers = new THREE.Points(markerGeometry, new THREE.ShaderMaterial({
+      uniforms: { pixelRatio: { value: 1 } },
       vertexShader: /* glsl */ `
+        uniform float pixelRatio;
         attribute vec3 color;
         attribute float visibility;
         varying vec3 vColor;
@@ -98,7 +100,8 @@ export class BodyViews {
           vColor = color;
           vVisibility = visibility;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = 7.0;
+          // 7 точек интерфейса, а не 7 пикселей буфера: на плотном экране кружок не должен мельчать.
+          gl_PointSize = 7.0 * pixelRatio;
         }
       `,
       fragmentShader: /* glsl */ `
@@ -271,7 +274,8 @@ export class BodyViews {
    * Маркеры видны, пока диск тела меньше нескольких пикселей, и гаснут, когда
    * тело становится различимым само.
    */
-  updateMarkers(camera: THREE.PerspectiveCamera, viewportHeight: number, enabled: boolean) {
+  updateMarkers(camera: THREE.PerspectiveCamera, viewportHeight: number, pixelRatio: number, enabled: boolean) {
+    (this.markers.material as THREE.ShaderMaterial).uniforms.pixelRatio.value = pixelRatio;
     const visibility = this.markers.geometry.attributes.visibility as THREE.BufferAttribute;
     const pixelsPerRadian = viewportHeight / THREE.MathUtils.degToRad(camera.fov);
     BODIES.forEach((info, i) => {

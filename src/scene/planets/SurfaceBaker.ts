@@ -12,6 +12,8 @@ export type BakedSurface = {
 };
 
 type Output = 'surface' | 'extra' | 'clouds';
+/** Что запечь в цель: генератор, выход и карты (общие у поверхности и её дополнительной карты). */
+type Plan = { target: THREE.WebGLCubeRenderTarget; generator: string; output: Output; maps: Record<string, SurfaceMap> | null };
 type LoadedMaps = { uniforms: Record<string, THREE.IUniform>; defines: Record<string, string>; loaded: Promise<unknown> };
 const NO_MAPS: LoadedMaps = { uniforms: {}, defines: {}, loaded: Promise.resolve() };
 type Job = {
@@ -79,15 +81,16 @@ const MAIN_BY_OUTPUT: Record<Output, string> = {
 export class SurfaceBaker {
   readonly surfaces = new Map<BodyId, BakedSurface>();
   private readonly jobs: Job[] = [];
+  private readonly plans: Plan[] = [];
   private readonly quad: THREE.Mesh;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private readonly totalJobs: number;
+  private totalJobs = 0;
   // Картинка декодируется вне главного потока (createImageBitmap): декодирование карты 4096×2048
   // через <img> при первой загрузке в текстуру занимает главный поток на ~0,1 с. Переворот по
   // вертикали делается там же — у ImageBitmap three.js его не выполняет.
   private readonly loader = new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY' });
-  private readonly loadedMaps: THREE.Texture[] = [];
+  private loadedMaps: THREE.Texture[] = [];
 
   constructor(sizeScale = 1) {
     this.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2));
@@ -101,19 +104,51 @@ export class SurfaceBaker {
         faceSize,
         relief: recipe.relief,
       };
-      const maps = this.loadMaps(recipe.maps ?? {});
-      this.addJobs(baked.surface, recipe.glsl, 'surface', maps);
+      const maps = recipe.maps ?? {};
+      this.plans.push({ target: baked.surface, generator: recipe.glsl, output: 'surface', maps });
       if (recipe.extraGlsl) {
         baked.extra = this.createTarget(Math.round(faceSize * EXTRA_FACE_SHARE), THREE.UnsignedByteType);
-        this.addJobs(baked.extra, recipe.extraGlsl, 'extra', maps);
+        this.plans.push({ target: baked.extra, generator: recipe.extraGlsl, output: 'extra', maps });
       }
       if (recipe.cloudsGlsl) {
         baked.clouds = this.createTarget(Math.round(faceSize * EXTRA_FACE_SHARE), THREE.UnsignedByteType);
-        this.addJobs(baked.clouds, recipe.cloudsGlsl, 'clouds', NO_MAPS);
+        this.plans.push({ target: baked.clouds, generator: recipe.cloudsGlsl, output: 'clouds', maps: null });
       }
       this.surfaces.set(id, baked);
     }
+    this.queueAll();
+  }
+
+  /**
+   * Ставит в очередь запекание всех поверхностей: при старте и после восстановления потерянного
+   * контекста WebGL — видеопамять тогда пуста, а кубические карты существуют только в ней.
+   * Карты-источники загружаются заново: после запекания они освобождаются.
+   */
+  queueAll() {
+    this.jobs.length = 0;
+    this.releaseMaps();
+    const loaded = new Map<Record<string, SurfaceMap>, LoadedMaps>();
+    for (const plan of this.plans) {
+      let maps = NO_MAPS;
+      if (plan.maps) {
+        maps = loaded.get(plan.maps) ?? this.loadMaps(plan.maps);
+        loaded.set(plan.maps, maps);
+      }
+      this.addJobs(plan.target, plan.generator, plan.output, maps);
+    }
     this.totalJobs = this.jobs.length;
+  }
+
+  /**
+   * Карты-источники нужны только шейдерам запекания: после него это ~70 МБ видеопамяти
+   * (цвет 4096×2048 с мип-уровнями, рельеф и ночные огни) и столько же декодированных картинок.
+   */
+  private releaseMaps() {
+    for (const texture of this.loadedMaps) {
+      (texture.image as ImageBitmap | undefined)?.close?.();
+      texture.dispose();
+    }
+    this.loadedMaps = [];
   }
 
   get progress(): number {
@@ -201,6 +236,10 @@ export class SurfaceBaker {
       }
       this.quad.material = job.material;
       job.material.uniforms.face.value = job.face;
+      // three.js пересчитывает мип-уровни всего куба после каждой грани; нужны они один раз — после
+      // последней. Хранилище уровней уже выделено при сборке шейдера под эту цель (generateMipmaps
+      // тогда было true), поэтому временное false его не урезает.
+      job.target.texture.generateMipmaps = job.face === 5;
       const previousTarget = renderer.getRenderTarget();
       renderer.setRenderTarget(job.target, job.face);
       renderer.render(this.scene, this.camera);
@@ -209,6 +248,7 @@ export class SurfaceBaker {
       facesThisFrame++;
       if (!this.jobs.some(other => other.material === job.material)) job.material.dispose();
     }
+    if (this.done && this.loadedMaps.length > 0) this.releaseMaps();
     return this.done;
   }
 
@@ -219,6 +259,6 @@ export class SurfaceBaker {
       baked.clouds?.dispose();
     }
     this.quad.geometry.dispose();
-    for (const texture of this.loadedMaps) texture.dispose();
+    this.releaseMaps();
   }
 }

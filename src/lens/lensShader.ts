@@ -133,8 +133,9 @@ export const lensFragmentShader = /* glsl */ `
     }
 
     // --- Выборка через объектив -------------------------------------------
+    // 16 выборок — только когда пятно размытия больше пикселя: меньшее глаз не отличит от резкого.
     vec3 color;
-    if (defocus > 0.0004) {
+    if (defocus * resolution.y > 0.75) {
       vec3 sum = vec3(0.0);
       float rotation = hash12(gl_FragCoord.xy) * 6.2831;
       for (int i = 0; i < DEFOCUS_TAPS; i++) {

@@ -142,6 +142,9 @@ export class Observatory {
   private historyKey = 0;
   private readonly stopListeningLanguage: () => void;
   private animationFrame = 0;
+  private disposed = false;
+  private stopWatchingPixelRatio = () => {};
+  private readonly glowTexture = createGlowTexture();
   private lastTimestamp = 0;
   private width = 1;
   private height = 1;
@@ -149,10 +152,19 @@ export class Observatory {
   private readonly occluders = new Set<Occluder>();
   private readonly occluderRects: DOMRect[] = [];
   private readonly coveredBands: [number, number][] = [];
-  private readonly scratch = { world: new THREE.Vector3(), projected: new THREE.Vector3(), scene: { x: 0, y: 0, z: 0 } as Vec3 };
+  private readonly scratch = { world: new THREE.Vector3(), projected: new THREE.Vector3(), scene: { x: 0, y: 0, z: 0 } as Vec3, drawingBuffer: new THREE.Vector2() };
 
   constructor(private readonly host: HTMLElement, labelsLayer: HTMLElement, hud: HTMLElement) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance', stencil: false });
+    // Буфер глубины холсту не нужен: сцена рисуется в свою цель, а на холст ложится только
+    // полноэкранный проход объектива без проверки глубины.
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, depth: false, powerPreference: 'high-performance', stencil: false });
+    // Сцена, ореол и рельеф рисуются в half float. В WebGL 2 рисовать в такие цели можно только
+    // с расширением; без него кадр молча остаётся чёрным — лучше честно показать ошибку.
+    const extensions = this.renderer.extensions;
+    if (!extensions.has('EXT_color_buffer_float') && !extensions.has('EXT_color_buffer_half_float')) {
+      this.renderer.dispose();
+      throw new Error('Rendering to half-float targets is not supported (EXT_color_buffer_float)');
+    }
     this.renderer.setClearColor(0x000000, 1);
     this.renderer.toneMapping = THREE.NoToneMapping;
     // Проверка ошибок шейдера синхронно ждёт драйвер при первом использовании программы — секунды
@@ -199,10 +211,13 @@ export class Observatory {
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(host);
     this.resize();
+    this.watchPixelRatio();
 
     const canvas = this.renderer.domElement;
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored);
+    this.store.subscribe(() => { host.dataset.sceneReady = String(this.store.get().ready); });
     this.animationFrame = requestAnimationFrame(this.tick);
     // Доступ из консоли и автотестов при разработке; в сборку не попадает.
     if (import.meta.env.DEV) (window as unknown as { observatory: Observatory }).observatory = this;
@@ -361,7 +376,7 @@ export class Observatory {
     camera.updateMatrixWorld();
     this.bodies.updateLighting(camera, now, this.sunBrightness);
     this.sky.update(camera, this.renderer.getPixelRatio(), state.showConstellations);
-    this.bodies.updateMarkers(camera, this.height, state.scaleMode === 'true' || state.showLabels);
+    this.bodies.updateMarkers(camera, this.height, this.renderer.getPixelRatio(), state.scaleMode === 'true' || state.showLabels);
     this.labels.update(this.bodies.views, camera, this.width, this.height, state.selected, state.showLabels, this.occluderRects);
 
     this.peaks.sample(now, this.peakState);
@@ -402,6 +417,7 @@ export class Observatory {
     this.updateMoon(mode);
     this.scene.updateMatrixWorld();
     void this.lensPass.compileAsync(this.renderer, this.scene, this.rig.camera, this.sky).then(() => {
+      if (this.disposed) return;
       const thumbnails = renderThumbnails(this.renderer, this.bodies.views, sun => this.bodies.useThumbnailLighting(sun));
       this.store.set({ thumbnails, loadProgress: 1, ready: true });
       this.lastTimestamp = 0;
@@ -532,7 +548,7 @@ export class Observatory {
       views: this.bodies.views,
       orbits: this.orbits.group,
       camera: this.rig.camera,
-      glowTexture: createGlowTexture(),
+      glowTexture: this.glowTexture,
       peaks: this.peaks,
       cameraInSystem: () => this.cameraInSystem(),
       project: point => this.projectSystemPoint(point),
@@ -586,6 +602,21 @@ export class Observatory {
     this.sky.setLanguage(i18n.language);
   }
 
+  /**
+   * Окно перенесли на монитор с другим масштабом: размер в точках может не измениться, и
+   * ResizeObserver молчит, а плотность пикселей уже другая. Запрос на текущую плотность срабатывает
+   * один раз, поэтому после каждого срабатывания ставится заново.
+   */
+  private watchPixelRatio() {
+    const query = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    const onChange = () => {
+      this.resize();
+      this.watchPixelRatio();
+    };
+    query.addEventListener('change', onChange, { once: true });
+    this.stopWatchingPixelRatio = () => query.removeEventListener('change', onChange);
+  }
+
   private resize() {
     this.width = Math.max(1, this.host.clientWidth);
     this.height = Math.max(1, this.host.clientHeight);
@@ -595,8 +626,23 @@ export class Observatory {
     this.renderer.domElement.style.width = '100%';
     this.renderer.domElement.style.height = '100%';
     this.rig.setAspect(this.width / this.height);
-    this.lensPass.setSize(Math.round(this.width * pixelRatio), Math.round(this.height * pixelRatio), this.quality.msaaSamples());
+    // Размер цели сцены — ровно размер буфера холста (three.js округляет вниз): разница в пиксель
+    // заставила бы последний проход растягивать кадр и мылить его на полтекселя.
+    const drawingBuffer = this.renderer.getDrawingBufferSize(this.scratch.drawingBuffer);
+    this.lensPass.setSize(drawingBuffer.x, drawingBuffer.y, this.quality.msaaSamples(window.devicePixelRatio || 1));
   }
+
+  /**
+   * Контекст WebGL теряется при сбросе драйвера, сне ноутбука, нехватке памяти на телефоне.
+   * three.js сам отменяет потерю и после восстановления заново заливает текстуры с картинками,
+   * но кубические карты поверхностей были только в видеопамяти: без нового запекания планеты
+   * остались бы чёрными. Сцена снова проходит подготовку, как при запуске.
+   */
+  private readonly onContextRestored = () => {
+    this.baker.queueAll();
+    this.shadersCompiling = false;
+    this.store.set({ ready: false, loadProgress: 0 });
+  };
 
   private readonly onPointerDown = (event: PointerEvent) => {
     this.pointerDown = { x: event.clientX, y: event.clientY };
@@ -628,12 +674,15 @@ export class Observatory {
   };
 
   dispose() {
+    this.disposed = true;
     cancelAnimationFrame(this.animationFrame);
     this.resizeObserver.disconnect();
+    this.stopWatchingPixelRatio();
     this.stopListeningLanguage();
     const canvas = this.renderer.domElement;
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointerup', this.onPointerUp);
+    canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.events.dispose();
     this.rig.dispose();
     this.labels.dispose();
@@ -650,7 +699,11 @@ export class Observatory {
         material.dispose();
       });
     });
+    this.glowTexture.dispose();
     this.renderer.dispose();
+    // Иначе контексты копятся при горячей перезагрузке, а их у вкладки всего около шестнадцати.
+    this.renderer.forceContextLoss();
     canvas.remove();
+    if (import.meta.env.DEV) delete (window as unknown as { observatory?: Observatory }).observatory;
   }
 }

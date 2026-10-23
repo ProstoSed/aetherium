@@ -131,9 +131,14 @@ function createMilkyWay(): THREE.Mesh {
         return mix(mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x), mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
                    mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x), mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y), f.z);
       }
-      float fbm(vec3 p) {
+      float fbm(vec3 p, const int octaves) {
         float s = 0.0, a = 0.5;
-        for (int i = 0; i < 5; i++) { s += a * noise(p); p *= 2.07; a *= 0.5; }
+        for (int i = 0; i < 5; i++) {
+          if (i >= octaves) break;
+          s += a * noise(p);
+          p *= 2.07;
+          a *= 0.5;
+        }
         return s;
       }
 
@@ -147,9 +152,11 @@ function createMilkyWay(): THREE.Mesh {
         float dec = asin(clamp(equatorial.z, -1.0, 1.0));
         vec2 uv = vec2(fract(ra / 6.2831853), dec / 3.14159265 + 0.5);
         float band = texture2D(milkyWay, uv).r;
-        // Звёздная «зернистость» и пылевые прожилки внутри полосы.
-        float grain = fbm(d * 60.0);
-        float dust = smoothstep(0.35, 0.75, fbm(d * 14.0 + 3.0));
+        // Звёздная «зернистость» и пылевые прожилки внутри полосы. У зерна четыре октавы: пятая —
+        // ~1100 периодов на радиан при пределе ~690 у экрана 1080p с углом 45°, то есть мельче пикселя;
+        // с весом 1/32 она давала только рябь при повороте, а стоила восемь синусов на пиксель неба.
+        float grain = fbm(d * 60.0, 4);
+        float dust = smoothstep(0.35, 0.75, fbm(d * 14.0 + 3.0, 5));
         float glow = pow(band, 1.25) * (0.55 + 0.6 * grain) * (1.0 - dust * 0.45);
         vec3 core = vec3(1.0, 0.82, 0.62);
         vec3 arm = vec3(0.62, 0.72, 1.0);
