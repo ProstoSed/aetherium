@@ -4,6 +4,10 @@ rem Aetherium launcher: installs dependencies when they are missing or out of da
 cd /d "%~dp0"
 title Aetherium
 
+rem The Node.js installer adds its folder to PATH, but other installers that rewrite PATH can drop
+rem it. The standard install folder is tried before giving up.
+where node >nul 2>nul
+if errorlevel 1 if exist "%ProgramFiles%\nodejs\node.exe" set "PATH=%ProgramFiles%\nodejs;%PATH%"
 where node >nul 2>nul
 if errorlevel 1 (
   echo Node.js 20.19 or newer is required. Download it from https://nodejs.org and run this file again.
